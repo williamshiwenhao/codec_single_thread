@@ -13,18 +13,21 @@
 
 class UdpSocket {
  public:
-  UdpSocket(const UdpSocket&) = delete;
+  UdpSocket(const UdpSocket &) = delete;
   UdpSocket() = default;
   ~UdpSocket();
   int Init();
   int Bind(const uint32_t port);  // Bind port
-
-  int SendTo(const char* ip, uint32_t port, const char* buff, const int length);
-  int RecvFrom(char* buff, const int length, sockaddr_in* addr = nullptr);
+  int SendTo(const char *ip, uint32_t port, const char *buff, const int length);
+  int RecvFrom(char *buff, const int length, sockaddr_in *addr = nullptr);
+  int Send(const char *buff, const int length);
+  void SetSendIp(const char *ip, const uint32_t port);
   void Close();
 
  private:
   int fd_ = -1;
+  bool remote_set_ = false;
+  sockaddr_in remote_addr_;
 };
 
 #endif

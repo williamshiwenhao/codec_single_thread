@@ -2,7 +2,7 @@
 
 EXE = telephone_test
 
-LIBS = pthread
+LIBS = pthread codec2
 LIBS_SEARCH_PATH =.
 INCLUDES =
 
