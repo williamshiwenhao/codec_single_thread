@@ -27,7 +27,7 @@ void Coder::DecodeLoop(const uint32_t recv_port, const char* ip,
   int send_length = codec2_samples_per_frame(coder->coder_base_) * 2;
   while (true) {
     coder->Recv(coder->coded_, sizeof(coder->coded_));
-    coder->Encode();
+    coder->Decode();
     coder->Send(coder->pcm_, send_length);
   }
 }

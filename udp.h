@@ -1,7 +1,6 @@
 /*
 @ Create on July 7 2019
 @ Author SWH
-@ Try boost::asio
  */
 
 #ifndef __UDP_H__
