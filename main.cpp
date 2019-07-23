@@ -12,6 +12,17 @@
 const char* kConfigFile = "config.json";
 
 int main() {
+  struct RtpHeader {
+    uint16_t v : 2;
+    uint16_t p : 1;
+    uint16_t x : 1;
+    uint16_t cc : 4;
+    uint16_t m : 1;
+    uint16_t pt : 7;
+    uint16_t sequence_num;
+    uint32_t timestamp;
+  };
+  printf("Sizeo of rtpheader = %lu\n", sizeof(RtpHeader));
   /************************************
    * Get config
    ************************************/

@@ -12,11 +12,7 @@ int UdpSocket::Init() {
   return 0;
 }
 
-int UdpSocket::Bind(const uint32_t port) {
-  if (port > 65536) {
-    // error port
-    return -1;
-  }
+int UdpSocket::Bind(const uint16_t port) {
   struct sockaddr_in server_addr;
   memset(&server_addr, 0, sizeof(server_addr));
   server_addr.sin_family = AF_INET;
@@ -32,9 +28,8 @@ void UdpSocket::Close() {
 
 UdpSocket::~UdpSocket() { Close(); }
 
-int UdpSocket::SendTo(const char* ip, const uint32_t port, const char* buff,
+int UdpSocket::SendTo(const char* ip, const uint16_t port, const char* buff,
                       const int length) {
-  if (port >= 65536) return -2;
   struct sockaddr_in remote_addr;
   memset(&remote_addr, 0, sizeof(remote_addr));
   remote_addr.sin_family = AF_INET;
@@ -60,8 +55,7 @@ int UdpSocket::RecvFrom(char* buff, const int length, sockaddr_in* addr) {
   return ret;
 }
 
-void UdpSocket::SetSendIp(const char* ip, const uint32_t port) {
-  if (port >= 65536) return;
+void UdpSocket::SetSendIp(const char* ip, const uint16_t port) {
   if (ip == nullptr) return;
   memset(&remote_addr_, 0, sizeof(remote_addr_));
   remote_addr_.sin_family = AF_INET;
