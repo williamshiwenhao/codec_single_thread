@@ -1,10 +1,19 @@
-/*
-@ Create on Aug 2 2019
-@ Author SWH
-@ Send and receive rtp packet
+/**
+ * @file rtp.h
+ * @author SWH
+ * @brief A rtp session use pjsip library. The class do not handle socket and
+ * SSRC conflict, so sessions cannot share the same port
+ * @version 0.1
+ * @date 2019-08-05
+ *
+ * @copyright Copyright (c) 2019
+ *
  */
 #ifndef __RTP_H__
 #define __RTP_H__
+#include <pjlib.h>  // pj_rand()
+#include <pjmedia/rtcp.h>
+#include <pjmedia/rtp.h>
 #include <cstdint>
 
 #include "logger.h"
@@ -21,24 +30,78 @@ struct RtpHeader {
   uint32_t ssrc;
 };
 
-class Rtp {
+const int kDefaultMast = 0;
+
+struct MediaParam {
+  int payload_type;
+  uint32_t clock_rate;
+  uint32_t samples_pre_frames;
+  uint32_t byre_pre_frame;
+};
+
+class RtpSession {
  public:
-  static bool HeaderCheck() {
-    auto size = sizeof(RtpHeader);
-    if (size != 12) {
-      PrintLog("[Error] RTP header size should be 8 byte!");
-      return false;
-    }
-    return true;
-  }
-  Rtp() = default;
-  Rtp(const Rtp&) = delete;
-  int Init(const uint16_t local_port);
-  int SetRemote(const char* ip, const uint16_t remote_port);
+  RtpSession() = default;
+  RtpSession(const RtpSession&) = delete;
+  RtpSession& operator=(const RtpSession&) = delete;
+  ~RtpSession();
+  /**
+   * Init rtp session
+   *
+   * @param parm media param
+   * @return int 0 if success
+   */
+  int Init(MediaParam& parm);
+
+  /**
+   * Generate rtp header
+   *
+   * @param payload_len payload length in byte
+   * @param buff pointer to buffer
+   * @param length the length of buff
+   * @param frame_num number of frames
+   * @return int header length when return > 0, false when <= 0
+   */
+  int GenerateRtpHeader(int payload_len, uint8_t* buff, const int length,
+                        const int frame_num = 1);
+
+  /**
+   * Decode incoming rtp packet into header and payload
+   *
+   * @param pkt Pointer to packet
+   * @param pkt_len Packet length
+   * @param payload Pointer to payload
+   * @param payload_length Length of payload
+   * @return int 0 if success
+   */
+  int DecodeRtpHeader(uint8_t* pkt, int pkt_len, const void** payload,
+                      unsigned* payload_length);
+
+  /**
+   * Generate rtcp. Add sender/receive report and source description
+   *
+   * @param buff
+   * @param length
+   * @return int Packet length, or -1 if error
+   */
+  int GenerateRtcp(uint8_t* buff, int length);
+
+  int DecodeRtcp(uint8_t* pkt, int pkt_length);
+
+  /**
+   * Generate bye packet, before bye packet, there will be a SR/RR packet
+   *
+   * @param buff
+   * @param length
+   * @return int Packet length, or -1 if error
+   */
+  int GenerateBye(uint8_t* buff, int length);
 
  private:
-  UdpSocket udp_;
-  RtpHeader send_header_, recv_header_;
+  uint32_t SSRCGenerator();
+  MediaParam param_;
+  pjmedia_rtp_session rtp_session_;
+  pjmedia_rtcp_session rtcp_session_;
 };
 
 #endif  //__RTP_H__
