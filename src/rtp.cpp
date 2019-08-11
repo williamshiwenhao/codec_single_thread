@@ -90,7 +90,7 @@ uint32_t RtpSession::SSRCGenerator() {
     struct timeval tv;
     clock_t cpu;
     pid_t pid;
-    // u_long hid;
+    u_long hid;
     uid_t uid;
     gid_t gid;
     struct utsname name;
@@ -100,7 +100,7 @@ uint32_t RtpSession::SSRCGenerator() {
   uname(&s.name);
   s.cpu = clock();
   s.pid = getpid();
-  // s.hid = gethostid();
+  s.hid = gethostid();
   s.uid = getuid();
   s.gid = getgid();
 
