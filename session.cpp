@@ -15,12 +15,11 @@ int Session::Init(const SessionParam& param) {
     PrintLog("[Error] Cannot recreate session");
     return -1;
   }
-  if (param.rtp_port_base & 1 != 0) {
+  if ((param.rtp_port_base & 1) != 0) {
     PrintLog("[Error] Rtp port should be even");
     return -1;
   }
   buff = new uint8_t[kBuffSize];
-  int status = 0;
   /// Init socket and bind port
   if (low_rate_socket_.Init()) {
     return -1;

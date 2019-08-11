@@ -2,15 +2,16 @@
 
 EXE = telephone_test
 
-LIBS = pthread codec2
-LIBS_SEARCH_PATH =.
+LIBS = pthread codec2 amr_wb samplerate
+
+LIBS_SEARCH_PATH =./lib /usr/local/lib
 INCLUDES =
 
 CXXFLAGS = -ggdb3 -O0 -Wall -Wextra -Werror #-Wconversion -Wshadow
 #CXXFLAGS = -ggdb3 -O2 -Wall -Wextra -Werror #-Wconversion -Wshadow
 
 
-CC = g++ --std=gnu++11
+CC = g++ --std=gnu++11 -g
 RM = rm -rf
 MKDIR = mkdir -p
 
@@ -30,6 +31,7 @@ DEPS = $(addprefix $(DIR_DEPS)/,$(SRCS:.cpp=.dep))
 
 ifneq ($(LIBS),"")
 LIBS := $(addprefix -l,$(LIBS))
+
 endif
 
 ifneq ($(LIBS_SEARCH_PATH),"")

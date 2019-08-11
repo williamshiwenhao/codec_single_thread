@@ -5,10 +5,12 @@
 #include <thread>
 #include <vector>
 
-#include "coder.h"
+#include "codec.h"
 #include "json.h"
+#include "test.h"
 #include "udp.h"
 #include "utils.h"
+
 const char* kConfigFile = "config.json";
 
 int main() {
@@ -17,32 +19,23 @@ int main() {
    ************************************/
   Json::Value root;
   ReadConfig(root, kConfigFile);
-  uint32_t en_recv_port = root["encode"]["recv_port"].asUInt();
-  std::string en_to_ip = root["encode"]["send_ip"].asString();
-  uint32_t en_to_port = root["encode"]["send_port"].asUInt();
-  uint32_t de_recv_port = root["decode"]["recv_port"].asUInt();
-  std::string de_to_ip = root["decode"]["send_ip"].asString();
-  uint32_t de_to_port = root["decode"]["send_port"].asUInt();
+  std::string sender_ip = root["sender"]["ip"].asString();
+  unsigned sender_local_port = root["sender"]["local_port"].asUInt();
+  unsigned sender_remote_port = root["sender"]["remote_port"].asUInt();
+  int sender_packet = root["sender"]["packets"].asInt();
+  int sender_frame_pre_packet = root["sender"]["frame_pre_packet"].asInt();
   printf("----------------------------------------\n");
-  printf("|Encoder message\n");
+  printf("|Sender message\n");
   printf("----------------------------------------\n");
-  printf("[Recv port] %u\n", en_recv_port);
-  printf("[Send to ip] %s\n", en_to_ip.data());
-  printf("[Send to port] %u\n", en_to_port);
-  printf("----------------------------------------\n");
-  printf("|Decoder message\n");
-  printf("----------------------------------------\n");
-  printf("[Recv port] %u\n", de_recv_port);
-  printf("[Send to ip] %s\n", de_to_ip.data());
-  printf("[Send to port] %u\n", de_to_port);
+  printf("[Local port] %u\n", sender_local_port);
+  printf("[Send to ip] %s\n", sender_ip.data());
+  printf("[Send to port] %u\n", sender_remote_port);
+  printf("[Packets] %d\n", sender_packet);
+  printf("[Frame pre packet] %d\n", sender_frame_pre_packet);
   /************************************
    * Create work thread
    ************************************/
-  std::vector<std::thread> thread_vector;
-  thread_vector.emplace_back(Coder::DecodeLoop, de_recv_port, de_to_ip.data(),
-                             de_to_port);
-  thread_vector.emplace_back(Coder::EncodeLoop, en_recv_port, en_to_ip.data(),
-                             en_to_port);
-  for (auto& th : thread_vector) th.join();
+  RtpSenderLoop(sender_ip.c_str(), sender_remote_port, sender_local_port,
+                sender_packet, sender_frame_pre_packet);
   return 0;
 }

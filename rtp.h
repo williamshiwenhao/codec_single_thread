@@ -1,34 +1,43 @@
 /**
  * @file rtp.h
  * @author SWH
- * @brief A rtp session use pjsip library. The class do not handle socket and
- * SSRC conflict, so sessions cannot share the same port
+ * @brief Rtp class without library
  * @version 0.1
- * @date 2019-08-05
+ * @date 2019-08-08
  *
  * @copyright Copyright (c) 2019
  *
  */
-#ifndef __RTP_H__
-#define __RTP_H__
-#include <pjlib.h>  // pj_rand()
-#include <pjmedia/rtcp.h>
-#include <pjmedia/rtp.h>
+#ifndef __MY_RTP_H__
+#define __MY_RTP_H__
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
 
 #include "logger.h"
-#include "udp.h"
+
 struct RtpHeader {
-  uint16_t v : 2;
-  uint16_t p : 1;
-  uint16_t x : 1;
-  uint16_t cc : 4;
-  uint16_t m : 1;
-  uint16_t pt : 7;
+#if __BYTE_ORDER == __BIG_ENDIAN
+  uint16_t v : 2;  /**< packet type/version	    */
+  uint16_t p : 1;  /**< padding flag		    */
+  uint16_t x : 1;  /**< extension flag		    */
+  uint16_t cc : 4; /**< CSRC count			    */
+  uint16_t m : 1;  /**< marker bit			    */
+  uint16_t pt : 7; /**< payload type		    */
+#else
+  uint16_t cc : 4; /**< CSRC count			    */
+  uint16_t x : 1;  /**< extension flag		    */
+  uint16_t p : 1;  /**< padding flag		    */
+  uint16_t v : 2;  /**< packet type/version	    */
+  uint16_t pt : 7; /**< payload type		    */
+  uint16_t m : 1;  /**< marker bit			    */
+#endif
   uint16_t sequence_num;
   uint32_t timestamp;
   uint32_t ssrc;
 };
+static const int kRtpHeaderSize = 12;
 
 const int kDefaultMast = 0;
 
@@ -36,7 +45,7 @@ struct MediaParam {
   int payload_type;
   uint32_t clock_rate;
   uint32_t samples_pre_frames;
-  uint32_t byre_pre_frame;
+  uint32_t byte_pre_frame;
 };
 
 class RtpSession {
@@ -44,64 +53,43 @@ class RtpSession {
   RtpSession() = default;
   RtpSession(const RtpSession&) = delete;
   RtpSession& operator=(const RtpSession&) = delete;
-  ~RtpSession();
   /**
    * Init rtp session
    *
    * @param parm media param
    * @return int 0 if success
    */
-  int Init(MediaParam& parm);
+  int Init(MediaParam& param);
 
   /**
    * Generate rtp header
    *
-   * @param payload_len payload length in byte
    * @param buff pointer to buffer
    * @param length the length of buff
    * @param frame_num number of frames
    * @return int header length when return > 0, false when <= 0
    */
-  int GenerateRtpHeader(int payload_len, uint8_t* buff, const int length,
+  int GenerateRtpHeader(uint8_t* buff, const unsigned length,
                         const int frame_num = 1);
 
   /**
-   * Decode incoming rtp packet into header and payload
+   * Decode rtp header. Caution! SSRC conflict not handled, so each session
+   * should use a unique port
    *
-   * @param pkt Pointer to packet
+   * @param pkt Pointer to packet recived
    * @param pkt_len Packet length
-   * @param payload Pointer to payload
-   * @param payload_length Length of payload
-   * @return int 0 if success
+   * @param lost_frames
+   * @param recv_frame
+   * @return int The rtp header length if >0 or decode false
    */
-  int DecodeRtpHeader(uint8_t* pkt, int pkt_len, const void** payload,
-                      unsigned* payload_length);
-
-  /**
-   * Generate rtcp. Add sender/receive report and source description
-   *
-   * @param buff
-   * @param length
-   * @return int Packet length, or -1 if error
-   */
-  int GenerateRtcp(uint8_t* buff, int length);
-
-  int DecodeRtcp(uint8_t* pkt, int pkt_length);
-
-  /**
-   * Generate bye packet, before bye packet, there will be a SR/RR packet
-   *
-   * @param buff
-   * @param length
-   * @return int Packet length, or -1 if error
-   */
-  int GenerateBye(uint8_t* buff, int length);
+  int DecodeRtpHeader(uint8_t* pkt, const unsigned pkt_len, int& lost_frames,
+                      int& recv_frame);
 
  private:
-  uint32_t SSRCGenerator();
+  static uint32_t SSRCGenerator();
   MediaParam param_;
-  pjmedia_rtp_session rtp_session_;
-  pjmedia_rtcp_session rtcp_session_;
+  RtpHeader send_header_, recv_header_;
+  bool decode_first_packet_ = true;  /// For decode
 };
 
-#endif  //__RTP_H__
+#endif  // __MY_RTP_H__

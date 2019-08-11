@@ -1,8 +1,10 @@
 {
-    "encode": {
-        "recv_port": 8000,
-        "send_ip": "127.0.0.1",
-        "send_port": 8001
+    "sender": {
+        "local_port": 60000,
+        "ip": "162.105.85.63",
+        "remote_port": 8001,
+        "packets": 2000,
+        "frame_pre_packet": 3
     },
     "decode": {
         "recv_port": 8001,

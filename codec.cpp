@@ -29,6 +29,10 @@ void Codec2PrintCoderMsg() {
   codec2_destroy(test_coder);
 }
 
+/******************************************************************* */
+/*Codec2EnCoder                                                     */
+/***************************************************************** */
+
 int Codec2EnCoder::Init() {
   if (coder_base_ != nullptr) {
     PrintLog("Reinit codec2encoder!");
@@ -87,6 +91,9 @@ int Codec2EnCoder::GetWhite(uint8_t* output, const int length,
   return frames * kCodec2FrameLength;
 }
 
+/******************************************************************* */
+/*Codec2Decoder                                                     */
+/***************************************************************** */
 int Codec2DeCoder::Init() {
   if (coder_base_ != nullptr) {
     PrintLog("Reinit codec2encoder!");
@@ -139,4 +146,66 @@ int Codec2DeCoder::GetWhite(uint8_t* output, const int length,
   }
   memset(output, 0, kPcmFrameLength * frames);
   return kPcmFrameLength * frames;
+}
+
+/******************************************************************* */
+/*RateConverter                                                     */
+/***************************************************************** */
+int RateConverter::Init(double rate, int quality) {
+  int error = 0;
+  rate_ = rate;
+  // only support 1 channel
+  p_state_ = src_new(quality, 1, &error);
+  if (p_state_ == nullptr) {
+    PrintLog("[Error] RateConverter init error");
+    return -1;
+  }
+  if (src_set_ratio(p_state_, rate)) {
+    PrintLog("[Error] RateConverter init rate error");
+    return -1;
+  }
+  src_set_ratio(p_state_, rate);
+  in_buff = new float[kBuffSize];
+  out_buff = new float[kBuffSize];
+  data_.data_in = in_buff;
+  data_.data_out = out_buff;
+  data_.output_frames = kBuffSize;
+  data_.src_ratio = rate;
+  data_.end_of_input = 0;
+  return 0;
+}
+
+RateConverter::~RateConverter() {
+  if (in_buff) delete[] in_buff;
+  if (out_buff) delete[] out_buff;
+  src_delete(p_state_);
+}
+
+int RateConverter::Convert(int16_t* input, int input_frames, int16_t* output,
+                           int output_frames, bool is_end) {
+  if (input_frames > kBuffSize || input_frames * rate_ > kBuffSize) {
+    PrintLog("[Error] Convert sample rate error, too much input frames");
+    return -1;
+  }
+  // Convert int16_t to float
+  src_short_to_float_array(input, in_buff, input_frames);
+  // Process
+  if (is_end)
+    data_.end_of_input = 1;
+  else
+    data_.end_of_input = 0;
+  data_.input_frames = input_frames;
+  if (src_process(p_state_, &data_)) {
+    PrintLog("[Error] Convert error");
+    return -1;
+  }
+  if (data_.input_frames_used != input_frames) {
+    PrintLog("[Warning] Convert warning, not all frames are used");
+  }
+  if (data_.output_frames_gen > output_frames) {
+    PrintLog("[Error] Convert sample rate error, too much input frames");
+    return -1;
+  }
+  src_float_to_short_array(out_buff, output, data_.output_frames_gen);
+  return data_.output_frames_gen;
 }

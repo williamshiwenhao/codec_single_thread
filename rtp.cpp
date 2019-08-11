@@ -1,117 +1,120 @@
-/**
- * @file rtp.cpp
- * @author SWH
- * @brief A rtp session using pjsip
- * @version 0.1
- * @date 2019-08-05
- *
- * @copyright Copyright (c) 2019
- *
- */
-#include <cstdlib>
-#include <ctime>
+#include <arpa/inet.h>
+#include <sys/time.h>    /* gettimeofday() */
+#include <sys/types.h>   /* u_long */
+#include <sys/utsname.h> /* uname() */
+#include <unistd.h>      /* get..() */
+#include <ctime>         /* clock() */
 
+#include "md5.h"
 #include "rtp.h"
 
 int RtpSession::Init(MediaParam& param) {
+  if (sizeof(RtpHeader) != kRtpHeaderSize) {
+    PrintLog(
+        "[Fatal Error] Wrong rtp header size!!! Check compiler memory "
+        "alignment");
+    return -1;
+  }
   param_ = param;
-  pj_uint32_t ssrc = RtpSession::SSRCGenerator();
-  pj_status_t pj_status;
-  pj_status = pjmedia_rtp_session_init(&rtp_session_, param.payload_type, ssrc);
-  if (pj_status != PJ_SUCCESS) {
-    PrintLog("[Error] Rtp session init error");
-    return -1;
-  }
-  pjmedia_rtcp_init(&rtcp_session_, "rtcp", param.clock_rate,
-                    param.samples_pre_frames, ssrc);
-}
-
-RtpSession::~RtpSession() {}
-
-int RtpSession::GenerateRtpHeader(int payload_len, uint8_t* buff,
-                                  const int length, const int frame_num) {
-  pj_status_t status;
-  const void* rtp_header;  /// Length of rtp header in byte
-  int header_length = 0;
-  /// Generate rtp header
-  status = pjmedia_rtp_encode_rtp(
-      &rtp_session_, param_.payload_type, kDefaultMast, payload_len,
-      param_.samples_pre_frames * frame_num, &rtp_header, &header_length);
-  if (status != PJ_SUCCESS) {
-    PrintLog("[Error] RtpSession error, can not generate rtp header");
-    return -1;
-  }
-  if (header_length > length) {
-    PrintLog("[Error] RtpSession error, no enough memory for rtp header");
-    return -1;
-  } else {
-    memcpy(buff, rtp_header, header_length);
-  }
-  /// Update rtcp
-  pjmedia_rtcp_tx_rtp(&rtcp_session_, frame_num * param_.byre_pre_frame);
-  return header_length;
-}
-
-int RtpSession::DecodeRtpHeader(uint8_t* pkt, int pkt_len, const void** payload,
-                                unsigned* payload_length) {
-  pj_status_t status;
-  const pjmedia_rtp_hdr* rtp_header;
-  /// Parse rtp
-  status = pjmedia_rtp_decode_rtp(&rtp_session_, pkt, pkt_len, &rtp_header,
-                                  (const void**)payload, payload_length);
-  if (status != PJ_SUCCESS) {
-    PrintLog("[Warning] Rtp decode failed");
-    return -1;
-  }
-  /// Update rtcp session
-  pjmedia_rtcp_rx_rtp(&rtcp_session_, pj_ntohs(rtp_header->seq),
-                      pj_ntohl(rtp_header->ts), *payload_length);
+  send_header_.v = 2;
+  send_header_.p = 0;
+  send_header_.x = 0;
+  send_header_.cc = 0;
+  send_header_.m = 0;
+  send_header_.pt = param.payload_type;
+  srand(time(NULL));
+  send_header_.sequence_num = uint16_t(rand() & 0xffff);
+  send_header_.timestamp = rand();
+  send_header_.ssrc = RtpSession::SSRCGenerator();
+  decode_first_packet_ = true;
   return 0;
 }
 
-int RtpSession::GenerateRtcp(uint8_t* buff, int length) {
-  int idx = 0;
-  pj_status_t status;
-  /// Generate rtcp sender report(SR) or receive report(RR)
-  void* pkt = nullptr;
-  int pkt_length = 0;
-  pjmedia_rtcp_build_rtcp(&rtcp_session_, &pkt, &pkt_length);
-  if (pkt == nullptr || pkt_length == 0) {
-    /// Unlikely
-    PrintLog("[Warning] Cannot generate rtcp packet");
+int RtpSession::GenerateRtpHeader(uint8_t* buff, const unsigned length,
+                                  const int frame_num) {
+  send_header_.sequence_num++;
+  send_header_.timestamp += frame_num * param_.samples_pre_frames;
+  if (length < sizeof(RtpHeader)) {
+    PrintLog("[Error] No enough memory for rtp header");
     return -1;
   }
-  if (idx + pkt_length > length) {
-    PrintLog("[Error] No enough memory for rtcp packet");
-    return -1;
-  }
-  memcpy(buff, pkt, pkt_length);
-  return pkt_length;
+  static const int no_order_head = 2;  // Value less than 1byte length
+  memcpy(buff, &send_header_, no_order_head);
+  // Change to network order
+  RtpHeader* now = (RtpHeader*)buff;
+  now->sequence_num = htons(send_header_.sequence_num);
+  now->timestamp = htonl(send_header_.timestamp);
+  now->ssrc = htonl(send_header_.ssrc);
+  return sizeof(RtpHeader);
 }
 
-int RtpSession::GenerateBye(uint8_t* buff, int length) {
-  pj_status_t status;
-  // Generate ss/sr first
-  int idx = GenerateRtcp(buff, length);
-  if (idx <= 0) {
-    PrintLog("[Warning] Generate bye failed, cannot generate SR/RR");
+int RtpSession::DecodeRtpHeader(uint8_t* pkt, const unsigned pkt_len,
+                                int& lost_frames, int& recv_frame) {
+  if (pkt_len < sizeof(RtpHeader)) {
+    PrintLog("[Warning] Packet's length less than rtp header length");
     return -1;
   }
-  int bye_size = length - idx;
-  status = pjmedia_rtcp_build_rtcp_bye(&rtcp_session_, buff + idx,
-                                       (pj_size_t*)(&bye_size), nullptr);
-  if (status != PJ_SUCCESS) {
-    PrintLog("[Warning] Cannot generate bye packet");
+  RtpHeader* now_head = (RtpHeader*)pkt;
+  if (now_head->v != 2 || now_head->x != 0 || now_head->cc != 0 ||
+      now_head->m != 0) {
+    PrintLog("[Error] Cannot parse rtp head");
     return -1;
   }
-  return idx + bye_size;
-}
-
-int RtpSession::DecodeRtcp(uint8_t* pkt, int pkt_length) {
-  pjmedia_rtcp_rx_rtcp(&rtcp_session_, pkt, pkt_length);
+  // Change to host order
+  now_head->sequence_num = ntohs(now_head->sequence_num);
+  now_head->timestamp = ntohl(now_head->timestamp);
+  now_head->ssrc = ntohl(now_head->ssrc);
+  // Though ssrc is just a id, I change it to host order for safty
+  if (decode_first_packet_) {
+    decode_first_packet_ = false;
+    recv_header_ = *now_head;
+    lost_frames = 0;
+  } else {
+    if (now_head->pt != recv_header_.pt) {
+      PrintLog("[Error] Payload type changed, cannot handle it");
+      return -1;
+    }
+    lost_frames = now_head->timestamp - recv_header_.timestamp;
+    recv_header_ = *now_head;
+  }
+  recv_frame = (pkt_len - sizeof(RtpHeader)) / param_.byte_pre_frame;
+  // recv_frame must >= 0, so change it to uin32_t directly
+  recv_header_.timestamp += (uint32_t)(recv_frame)*param_.samples_pre_frames;
+  return sizeof(RtpHeader);
 }
 
 uint32_t RtpSession::SSRCGenerator() {
-  // TODO: rtp ssrc should use md5, now are using random directly
-  return pj_rand();
+  uint8_t buff[16];  // md5 result
+  // Hash source
+  struct {
+    struct timeval tv;
+    clock_t cpu;
+    pid_t pid;
+    u_long hid;
+    uid_t uid;
+    gid_t gid;
+    struct utsname name;
+  } s;
+
+  gettimeofday(&s.tv, 0);
+  uname(&s.name);
+  s.cpu = clock();
+  s.pid = getpid();
+  s.hid = gethostid();
+  s.uid = getuid();
+  s.gid = getgid();
+
+  // Calculate md5 of s
+  MD5_CTX md5;
+  MD5Init(&md5);
+  MD5Update(&md5, (unsigned char*)&s, sizeof(s));
+  MD5Final((unsigned char*)buff, &md5);
+  uint32_t* p32 = (uint32_t*)buff;
+  uint32_t SSRC = *p32;
+  p32++;
+  for (int i = 0; i < 3; ++i) {
+    SSRC ^= *p32;
+    p32++;
+  }
+  return SSRC;
 }
