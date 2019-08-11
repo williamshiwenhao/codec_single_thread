@@ -86,7 +86,7 @@ class RtpSession {
                       int& recv_frame);
 
  private:
-  static uint32_t SSRCGenerator();
+  uint32_t SSRCGenerator();
   MediaParam param_;
   RtpHeader send_header_, recv_header_;
   bool decode_first_packet_ = true;  /// For decode

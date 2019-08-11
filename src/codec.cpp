@@ -209,3 +209,7 @@ int RateConverter::Convert(int16_t* input, int input_frames, int16_t* output,
   src_float_to_short_array(out_buff, output, data_.output_frames_gen);
   return data_.output_frames_gen;
 }
+
+/******************************************************************* */
+/*AmrWbEncoder                                                      */
+/***************************************************************** */
