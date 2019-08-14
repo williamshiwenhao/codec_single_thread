@@ -64,7 +64,7 @@ int RtpSession::DecodeRtpHeader(uint8_t* pkt, const unsigned pkt_len,
   now_head->sequence_num = ntohs(now_head->sequence_num);
   now_head->timestamp = ntohl(now_head->timestamp);
   now_head->ssrc = ntohl(now_head->ssrc);
-  // Though ssrc is just a id, I change it to host order for safty
+  // Though ssrc is just a id, I change it to host order for safe
   if (decode_first_packet_) {
     decode_first_packet_ = false;
     recv_header_ = *now_head;
@@ -74,8 +74,14 @@ int RtpSession::DecodeRtpHeader(uint8_t* pkt, const unsigned pkt_len,
       PrintLog("[Error] Payload type changed, cannot handle it");
       return -1;
     }
-    lost_frames = now_head->timestamp - recv_header_.timestamp;
-    recv_header_ = *now_head;
+    if (now_head->timestamp < recv_header_.timestamp) {
+      // Receive old packet
+      lost_frames = recv_header_.timestamp - now_head->timestamp;
+      lost_frames = -lost_frames;
+    } else {
+      lost_frames = now_head->timestamp - recv_header_.timestamp;
+      recv_header_ = *now_head;
+    }
   }
   recv_frame = (pkt_len - sizeof(RtpHeader)) / param_.byte_pre_frame;
   // recv_frame must >= 0, so change it to uin32_t directly

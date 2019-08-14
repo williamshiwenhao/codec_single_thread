@@ -17,9 +17,14 @@
 #include "codec2.h"
 #include "udp.h"
 
+#define __USE_AMRWB__
+
 const int kPcmFrameLength = 320;  // Byte
 const int kPcmFrameSample = 160;
-const int kCodec2FrameLength = 6;  // Byte
+const int kCodec2FrameLength = 6;   // Byte
+const int kAmrWbFrameSample = 320;  // 320 sample = 20ms
+const int16_t kAmrAllowDtx = 1;     // allow dtx
+const int16_t kAmrEncodeMode = 8;
 
 /**
  * @brief Print message of Codec2
@@ -44,7 +49,7 @@ class RateConverter {
    * @param quality The quality of converter
    * @return int 0 if success
    */
-  int Init(double rate, int quality = SRC_SINC_BEST_QUALITY);
+  int Init(double rate, int quality = SRC_SINC_MEDIUM_QUALITY);
 
   /**
    * Conver frames' sample rate. Input buff and output buff can be the same one
@@ -92,7 +97,7 @@ class Coder {
    * @param output_length Input the output buff length
    * @return int The length of packet when > 0 or error when < 0
    */
-  virtual int Codec(const uint8_t *input, const int length, uint8_t *output,
+  virtual int Codec(uint8_t *input, const int length, uint8_t *output,
                     int output_length) = 0;
   /**
    * @brief Get white frame, in cases some frames are lost
@@ -109,7 +114,7 @@ class Codec2EnCoder : public Coder {
  public:
   virtual ~Codec2EnCoder();
   virtual int Init();
-  virtual int Codec(const uint8_t *input, const int length, uint8_t *output,
+  virtual int Codec(uint8_t *input, const int length, uint8_t *output,
                     int output_length);
   virtual int GetWhite(uint8_t *output, const int length, const int frames);
 
@@ -121,7 +126,7 @@ class Codec2DeCoder : public Coder {
  public:
   virtual ~Codec2DeCoder();
   virtual int Init();
-  virtual int Codec(const uint8_t *input, const int length, uint8_t *output,
+  virtual int Codec(uint8_t *input, const int length, uint8_t *output,
                     int output_length);
   virtual int GetWhite(uint8_t *output, const int length, const int frames);
 
@@ -129,18 +134,25 @@ class Codec2DeCoder : public Coder {
   struct CODEC2 *coder_base_ = nullptr;  /// The codec mode
 };
 
+#ifdef __USE_AMRWB__
+/**
+ * AMR WB uses sip standard (RFC 3267), not newer standard (TS 26.201)
+ * If newer standard is needed, please use macro __AMR_IF2__ and remember to
+ * recompile the amr library with macro IF2
+ */
 class AmrWbEnCoder : public Coder {
  public:
   AmrWbEnCoder() = default;
   virtual ~AmrWbEnCoder();
   virtual int Init();
-  virtual int Codec(const uint8_t *input, const int length, uint8_t *output,
+  virtual int Codec(uint8_t *input, const int length, uint8_t *output,
                     int output_length);
   virtual int GetWhite(uint8_t *output, const int length, const int frames);
 
  private:
   void *coder_base_ = nullptr;
   RateConverter converter;
+  uint8_t amr_buff_[64];
 };
 
 class AmrWbDeCoder : public Coder {
@@ -148,13 +160,15 @@ class AmrWbDeCoder : public Coder {
   AmrWbDeCoder() = default;
   virtual ~AmrWbDeCoder();
   virtual int Init();
-  virtual int Codec(const uint8_t *input, const int length, uint8_t *output,
+  virtual int Codec(uint8_t *input, const int length, uint8_t *output,
                     int output_length);
   virtual int GetWhite(uint8_t *output, const int length, const int frames);
 
  private:
   void *coder_base_ = nullptr;
   RateConverter converter;
+  uint8_t amr_buff_[1600];
 };
+#endif
 
 #endif  //__CODEC_H__
