@@ -16,6 +16,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 file(GLOB_RECURSE MAIN_SOURCES "src/*.cpp")
 list(REMOVE_ITEM MAIN_SOURCES "${PROJECT_DIR}/src/main.cpp")
 
+
 set(SERVICE_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 
 link_directories(
@@ -28,12 +29,18 @@ include_directories(
     ${SERVICE_INCLUDE}
     )
 
-link_libraries(
+
+set(SRC_LIB codec_common_lib)
+add_library(${SRC_LIB} STATIC ${MAIN_SOURCES})
+set(COMMON_LIB
+    ${SRC_LIB}
     codec2
     amr_wb
     samplerate
     pthread
 )
 
-add_executable(${PROJECT_NAME} ${MAIN_SOURCES} "src/main.cpp")
+
+add_executable(${PROJECT_NAME}  "src/main.cpp")
+target_link_libraries(${PROJECT_NAME} ${COMMON_LIB})
 add_subdirectory(test)

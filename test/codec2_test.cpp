@@ -1,9 +1,9 @@
 /**
- * @file amr_wb.cpp
+ * @file codec2_test.cpp
  * @author SWH
- * @brief Test coder->amr_wb model using file
+ * @brief Test codec2
  * @version 0.1
- * @date 2019-08-12
+ * @date 2019-08-14
  *
  * @copyright Copyright (c) 2019
  *
@@ -20,14 +20,18 @@
 #include "logger.h"
 
 const char kInput[] = "audio/8k.raw";
-const char kOutputAmr[] = "audio/8k.amr";
-const char kOutputPcm[] = "audio/amr_output.pcm";
+const char kOutputAmr[] = "audio/8k.codec2";
+const char kOutputPcm[] = "audio/codec2_output.pcm";
 
 const int kCodecUnit = 3;
 
+using std::ifstream;
+using std::ofstream;
+using std::vector;
+
 void NormalTest() {
-  std::unique_ptr<Coder> encoder{new AmrWbEnCoder};
-  std::unique_ptr<Coder> decoder{new AmrWbDeCoder};
+  std::unique_ptr<Coder> encoder{new Codec2EnCoder};
+  std::unique_ptr<Coder> decoder{new Codec2DeCoder};
   if (encoder->Init()) {
     fprintf(stderr, "[Error] Encoder init error\n");
     return;
@@ -37,7 +41,7 @@ void NormalTest() {
     return;
   }
   // Read file
-  std::ifstream in_fd;
+  ifstream in_fd;
   in_fd.open(kInput, std::ifstream::binary);
   if (!in_fd) {
     fprintf(stderr, "[Error] Cannot open input pcm file\n");
@@ -47,44 +51,43 @@ void NormalTest() {
   in_fd.seekg(0, in_fd.end);
   int input_length = in_fd.tellg();
   in_fd.seekg(in_fd.beg);
-  char* in_buff = new char[input_length];
-  int buff_size = input_length;
-  in_fd.read(in_buff, input_length);
+  vector<char> in_buff(input_length);
+  in_fd.read(in_buff.data(), input_length);
   if (!in_fd) {
     fprintf(stderr, "[Error] Cannot read data\n");
     return;
   }
   in_fd.close();
-  char* p_frame = in_buff;
+  char* p_frame = in_buff.data();
   char amr_buff[1600];
+  vector<char> out_buff(input_length);
+  out_buff.clear();
+  char buff[1600];
   int codec_uint_length = kPcmFrameLength * kCodecUnit;
   while (input_length >= codec_uint_length) {
     int len = encoder->Codec((uint8_t*)p_frame, codec_uint_length,
                              (uint8_t*)amr_buff, sizeof(amr_buff));
     if (len < 0) {
       fprintf(stderr, "[Error] Encoder error\n");
-      delete[] in_buff;
       return;
     }
-    len = decoder->Codec((uint8_t*)amr_buff, len, (uint8_t*)p_frame,
-                         input_length);
+    memset(p_frame, 0, codec_uint_length);
+    len = decoder->Codec((uint8_t*)amr_buff, len, (uint8_t*)buff, sizeof(buff));
     if (len != codec_uint_length) {
       fprintf(stderr, "[Error] Decoder output length error\n");
-      delete[] in_buff;
       return;
     }
+    out_buff.insert(out_buff.end(), buff, buff + len);
     if (len < 0) {
       fprintf(stderr, "[Error] Decoder error\n");
-      delete[] in_buff;
       return;
     }
     p_frame += codec_uint_length;
     input_length -= codec_uint_length;
   }
-  std::ofstream out_fd;
+  ofstream out_fd;
   out_fd.open(kOutputPcm, std::ofstream::binary);
-  out_fd.write(in_buff, buff_size);
-  delete[] in_buff;
+  out_fd.write(out_buff.data(), out_buff.size());
   if (!out_fd) {
     fprintf(stderr, "[Error] Write error\n");
     out_fd.close();
@@ -94,7 +97,7 @@ void NormalTest() {
 }
 
 void EncodeTest() {
-  std::unique_ptr<Coder> encoder{new Codec2EnCoder};
+  std::unique_ptr<Coder> encoder{new AmrWbEnCoder};
   if (encoder->Init()) {
     fprintf(stderr, "[Error] Encoder init error\n");
     return;
@@ -149,9 +152,9 @@ void EncodeTest() {
 }
 
 int main() {
-  printf("[Test] Start\n");
+  printf("[Test] Codec2 test Start\n");
   NormalTest();
   // EncodeTest();
-  printf("[Test] Finished\n");
+  printf("[Test] Codec2 test Finished\n");
   return 0;
 }

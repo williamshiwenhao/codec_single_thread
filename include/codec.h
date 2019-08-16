@@ -26,6 +26,14 @@ const int kAmrWbFrameSample = 320;  // 320 sample = 20ms
 const int16_t kAmrAllowDtx = 1;     // allow dtx
 const int16_t kAmrEncodeMode = 8;
 
+struct MediaParam {
+  int payload_type;
+  uint32_t clock_rate;
+  uint32_t samples_pre_frames;
+  uint32_t byte_pre_frame;
+  uint32_t frames_pre_packet;
+};
+
 /**
  * @brief Print message of Codec2
  *
@@ -82,12 +90,14 @@ class Coder {
   Coder(const Coder &) = delete;
   Coder &operator=(const Coder &) = delete;
   virtual ~Coder(){};
+
   /**
    * @brief Init the coder
    *
    * @return int 0 if succeed
    */
   virtual int Init() = 0;
+
   /**
    * @brief code
    *
@@ -99,6 +109,7 @@ class Coder {
    */
   virtual int Codec(uint8_t *input, const int length, uint8_t *output,
                     int output_length) = 0;
+
   /**
    * @brief Get white frame, in cases some frames are lost
    *
@@ -169,6 +180,39 @@ class AmrWbDeCoder : public Coder {
   RateConverter converter;
   uint8_t amr_buff_[1600];
 };
-#endif
+#endif  //__USE_AMRWB__
+
+// PCM
+class PcmUEnCoder : public Coder {
+ public:
+  virtual int Init() { return 0; }
+  virtual int Codec(uint8_t *input, const int length, uint8_t *output,
+                    int output_length);
+  virtual int GetWhite(uint8_t *output, const int length, const int frames);
+};
+
+class PcmUDeCoder : public Coder {
+ public:
+  virtual int Init() { return 0; }
+  virtual int Codec(uint8_t *input, const int length, uint8_t *output,
+                    int output_length);
+  virtual int GetWhite(uint8_t *output, const int length, const int frames);
+};
+
+class PcmAEnCoder : public Coder {
+ public:
+  virtual int Init() { return 0; }
+  virtual int Codec(uint8_t *input, const int length, uint8_t *output,
+                    int output_length);
+  virtual int GetWhite(uint8_t *output, const int length, const int frames);
+};
+
+class PcmADeCoder : public Coder {
+ public:
+  virtual int Init() { return 0; }
+  virtual int Codec(uint8_t *input, const int length, uint8_t *output,
+                    int output_length);
+  virtual int GetWhite(uint8_t *output, const int length, const int frames);
+};
 
 #endif  //__CODEC_H__

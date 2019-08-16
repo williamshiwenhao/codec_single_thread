@@ -16,19 +16,26 @@
 #include "codec.h"
 #include "logger.h"
 #include "rtp.h"
+#include "sc.h"
 #include "udp.h"
+#include "utils.h"
 
 #define SENT_RTCP
 
 const int kBuffSize = 1600;
 
 struct SessionParam {
-  uint16_t low_rate_port;         /// port for 2.4k audio
-  uint16_t rtp_port_base;         /// port for rtp port, must be even
-  enum { To4G, From4G } forward;  /// determin the codec changer forward
-  char ip[16];                    /// IP of IMS
-  uint16_t remote_port;           /// Port to send data
-  MediaParam media_param;
+  uint16_t sc_port;        // port for 2.4k audio
+  uint16_t rtp_port_base;  // port for rtp port, must be even
+  uint8_t forward;         // determin the codec changer forward
+  char ip[16];             // IP of IMS
+  uint16_t remote_port;    // Port to send data
+  MediaParam sc_media;
+  MediaParam rtp_media;
+  int sc_samples_pre_packet;
+  uint8_t encoder_type;
+  uint8_t decoder_type;
+  uint8_t sc_id[5];
 };
 
 class Session {
@@ -38,15 +45,34 @@ class Session {
   Session &operator=(const Session &) = delete;  /// Disable assignment
   int Init(const SessionParam &);                /// Init a session
   ~Session();
-  std::vector<UdpSocket *>
-  GetSocket();  /// Get sockets for something like epoll()
-  int SendFrame(const uint8_t data, int length);
+  UdpSocket *GetSocket();  /// Get sockets for something like epoll()
+
+  /**
+   * @Change codec and payload header
+   *
+   * @param input Pointer to input
+   * @param input_length input length
+   * @param output Pointer to output buff
+   * @param output_length output buff length
+   * @return int packet length or negative on error
+   */
+  int Codec(uint8_t *input, int input_length, uint8_t *output,
+            int output_length);
+
+  /**
+   * Receive packet and handle it
+   *
+   */
+  void RecvLoop(bool &work);
 
  private:
-  uint8_t *buff = nullptr;
-  UdpSocket low_rate_socket_, rtp_socket_, rtcp_socket_;
-  Coder *decoder_, *encoder_;
+  SessionParam param_;
+  std::vector<uint8_t> buff_in_{std::vector<uint8_t>(kBuffSize)};
+  std::vector<uint8_t> buff_out_{std::vector<uint8_t>(kBuffSize)};
+  UdpSocket sc_socket_, rtp_socket_;
+  Coder *decoder_ = nullptr, *encoder_ = nullptr;
   RtpSession rtp_session_;
+  SC sc_session_;
 };
 
 #endif  // __SESSION_H__

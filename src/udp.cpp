@@ -24,6 +24,7 @@ int UdpSocket::Bind(const uint16_t port) {
 
 void UdpSocket::Close() {
   if (fd_ > 0) close(fd_);
+  fd_ = -1;
 }
 
 UdpSocket::~UdpSocket() { Close(); }

@@ -15,7 +15,9 @@
 #include <cstring>
 #include <ctime>
 
+#include "codec.h"
 #include "logger.h"
+
 
 struct RtpHeader {
 #if __BYTE_ORDER == __BIG_ENDIAN
@@ -41,13 +43,6 @@ static const int kRtpHeaderSize = 12;
 
 const int kDefaultMast = 0;
 
-struct MediaParam {
-  int payload_type;
-  uint32_t clock_rate;
-  uint32_t samples_pre_frames;
-  uint32_t byte_pre_frame;
-};
-
 class RtpSession {
  public:
   RtpSession() = default;
@@ -59,7 +54,7 @@ class RtpSession {
    * @param parm media param
    * @return int 0 if success
    */
-  int Init(MediaParam& param);
+  int Init(const MediaParam& param);
 
   /**
    * Generate rtp header
@@ -78,11 +73,11 @@ class RtpSession {
    *
    * @param pkt Pointer to packet recived
    * @param pkt_len Packet length
-   * @param lost_frames
+   * @param lost_samples
    * @param recv_frame
    * @return int The rtp header length if >0 or decode false
    */
-  int DecodeRtpHeader(uint8_t* pkt, const unsigned pkt_len, int& lost_frames,
+  int DecodeRtpHeader(uint8_t* pkt, const unsigned pkt_len, int& lost_samples,
                       int& recv_frame);
 
  private:

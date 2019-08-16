@@ -4,11 +4,12 @@
 #include <sys/utsname.h> /* uname() */
 #include <unistd.h>      /* get..() */
 #include <ctime>         /* clock() */
+#include <limits>
 
 #include "md5.h"
 #include "rtp.h"
 
-int RtpSession::Init(MediaParam& param) {
+int RtpSession::Init(const MediaParam& param) {
   if (sizeof(RtpHeader) != kRtpHeaderSize) {
     PrintLog(
         "[Fatal Error] Wrong rtp header size!!! Check compiler memory "
@@ -49,7 +50,8 @@ int RtpSession::GenerateRtpHeader(uint8_t* buff, const unsigned length,
 }
 
 int RtpSession::DecodeRtpHeader(uint8_t* pkt, const unsigned pkt_len,
-                                int& lost_frames, int& recv_frame) {
+                                int& lost_samples, int& recv_frame) {
+  lost_samples = 0;
   if (pkt_len < sizeof(RtpHeader)) {
     PrintLog("[Warning] Packet's length less than rtp header length");
     return -1;
@@ -68,20 +70,21 @@ int RtpSession::DecodeRtpHeader(uint8_t* pkt, const unsigned pkt_len,
   if (decode_first_packet_) {
     decode_first_packet_ = false;
     recv_header_ = *now_head;
-    lost_frames = 0;
   } else {
     if (now_head->pt != recv_header_.pt) {
       PrintLog("[Error] Payload type changed, cannot handle it");
       return -1;
     }
-    if (now_head->timestamp < recv_header_.timestamp) {
-      // Receive old packet
-      lost_frames = recv_header_.timestamp - now_head->timestamp;
-      lost_frames = -lost_frames;
+    uint16_t diff = now_head->timestamp - recv_header_.timestamp;
+    if (diff > std::numeric_limits<uint16_t>::max() >> 1) {
+      // old packet
+      lost_samples = diff - std::numeric_limits<uint16_t>::max();
+      return -1;
     } else {
-      lost_frames = now_head->timestamp - recv_header_.timestamp;
+      lost_samples = diff;
       recv_header_ = *now_head;
     }
+    return sizeof(RtpHeader);
   }
   recv_frame = (pkt_len - sizeof(RtpHeader)) / param_.byte_pre_frame;
   // recv_frame must >= 0, so change it to uin32_t directly
