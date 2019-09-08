@@ -1,0 +1,11 @@
+{
+  "codec_test": {
+    "codec_type": "pcm"
+  },
+  "rtp_test": {
+    "ip": "127.0.0.1",
+    "port": 8088,
+    "payload type": 0,
+    "codec type": "pcmu"
+  }
+}
