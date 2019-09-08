@@ -105,6 +105,7 @@ UdpSocket* Session::GetSocket() {
   return &sc_socket_;
 }
 
+// TODO: media param 中不应该有frames_pre_packet
 int Session::Codec(uint8_t* input, int input_length, uint8_t* output,
                    int output_length) {
   // Decode head

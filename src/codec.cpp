@@ -421,14 +421,14 @@ int PcmUEnCoder::Codec(uint8_t* input, const int length, uint8_t* output,
   }
   static const int16_t seg_end[8] = {0xFF,  0x1FF,  0x3FF,  0x7FF,
                                      0xFFF, 0x1FFF, 0x3FFF, 0x7FFF};
-  const int16_t kBIAS{0x84};
+  const int kBIAS{0x84};
   int16_t* speech = (int16_t*)input;
   int frames = length >> 1;
   for (int i = 0; i < frames; ++i) {
     int mask;
-    int seg;
+    int seg = 0;
     unsigned char uval;
-    int16_t& pcm_val = speech[i];
+    int pcm_val = speech[i];
 
     /* Get the sign and the magnitude of the value. */
     if (pcm_val < 0) {
@@ -441,7 +441,7 @@ int PcmUEnCoder::Codec(uint8_t* input, const int length, uint8_t* output,
 
     /* Convert the scaled magnitude to segment number. */
     for (; seg < 8; ++seg) {
-      if (pcm_val < seg_end[seg]) {
+      if (pcm_val <= seg_end[seg]) {
         break;
       }
     }
@@ -537,7 +537,7 @@ int PcmAEnCoder::Codec(uint8_t* input, const int length, uint8_t* output,
   int frames = length >> 1;
   for (int i = 0; i < frames; ++i) {
     int mask;
-    int seg;
+    int seg = 0;
     uint8_t aval;
     int16_t& pcm_val = speech[i];
     static const int kSegShift = 4;
@@ -554,7 +554,7 @@ int PcmAEnCoder::Codec(uint8_t* input, const int length, uint8_t* output,
 
     /* Convert the scaled magnitude to segment number. */
     for (; seg < 8; ++seg) {
-      if (pcm_val < seg_end[seg]) {
+      if (pcm_val <= seg_end[seg]) {
         break;
       }
     }

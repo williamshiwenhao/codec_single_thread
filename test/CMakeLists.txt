@@ -10,3 +10,9 @@ target_link_libraries(codec2_test ${COMMON_LIB})
 
 add_executable(test test.cpp)
 target_link_libraries(test ${COMMON_LIB})
+
+add_executable(rtp_test rtp_test.cpp)
+target_link_libraries(rtp_test ${COMMON_LIB})
+
+add_executable(codec_test codec_test.cpp)
+target_link_libraries(codec_test ${COMMON_LIB})

@@ -17,7 +17,7 @@ const int kPacketLength = 964;
 const int kFramePrePacket = 3;
 
 void EncodeLoop(uint16_t listen_port, const char* ip,
-                const uint16_t remote_port, std::atomic<bool>& work) {
+                const uint16_t remote_port, bool& work) {
   UdpSocket udp_server;
   if (udp_server.Init()) {
     return;
@@ -69,7 +69,7 @@ void EncodeLoop(uint16_t listen_port, const char* ip,
   udp_server.Close();
 }
 
-void HandleConsole(std::atomic<bool> work) {
+void HandleConsole(bool& work) {
   std::string str;
   while (std::cin >> str) {
     if (str == std::string{"q"} || str == std::string("quit")) {
@@ -101,7 +101,7 @@ int main() {
   /************************************
    * Create work thread
    ************************************/
-  std::atomic<bool> work{true};
+  bool work{true};
   std::thread console_hander(HandleConsole, std::ref(work));
   EncodeLoop(recv_port, ip.c_str(), send_port, work);
   console_hander.join();
