@@ -7,16 +7,16 @@
 #include "sc.h"
 #include "utils.h"
 
-int SC::Init(const uint8_t id[5]) {
-  if (ResetSend(id)) return -1;
+int SC::Init(uint32_t ueid) {
+  if (ResetSend(ueid)) return -1;
   return ResetRecv();
 }
 
-int SC::ResetSend(const uint8_t id[5]) {
+int SC::ResetSend(uint32_t ueid) {
   if (!CheckHeadSize()) return -1;
   memset(&send_header_, 0, sizeof(send_header_));
-  memcpy(&send_header_.id, id, sizeof(send_header_.id));
-  send_header_.forward = Transforward::From4G;
+  send_header_.ueid = ueid;
+  SetScForward(send_header_, uint8_t(Transforward::From4G));
   return 0;
 }
 
@@ -32,14 +32,9 @@ int SC::Send(uint16_t payload_length, uint8_t* buff, int buff_length) {
     PrintLog("[Warning] No enough memory for SC packet");
     return -1;
   }
-  send_header_.length = payload_length;
-  memcpy(buff, &send_header_, sizeof(send_header_));
-#ifdef SC_BIGENDIAN
-  SCHeader* now_header = (SCHeader*)buff;
-  now_header->sequence_number = htons(now_header->sequence_number);
-  now_header->rev = htons(now_header->rev);
-  now_header->length = htons(now_header->length);
-#endif
+  send_header_.length = payload_length;  // CHECK: 载荷长度应当不包括头长度
+  SetScSn(send_header_, GetScSn(send_header_) + 1);
+  ScCopyToNet((SCHeader*)buff, &send_header_);
   return sizeof(send_header_);
 }
 
@@ -49,19 +44,17 @@ int SC::Recv(uint8_t* data, int data_length, int& lost_pack) {
     return -1;
   }
   SCHeader now_header;
+  ScCopyFromNet(&now_header, (SCHeader*)data);
   lost_pack = 0;
-  memcpy(&now_header, data, sizeof(now_header));
-#ifdef SC_BIGENDIAN
-  now_header.sequence_number = ntohs(now_header.sequence_number);
-  now_header.rev = ntohs(now_header.rev);
-  now_header.length = ntohs(now_header.length);
-#endif  // SC_BIGENDIAN
+
   // Check length
   if (data_length != (int)sizeof(now_header) + (int)now_header.length) {
     PrintLog("[Warning] SC recv: length error");
+    printf("length = %d\n", now_header.length);
     return -1;
   }
-  if (now_header.forward != Transforward::To4G) {
+  // TODO: 注释下面的代码是为了测试方便，可以自环。正式使用时应当去除注释
+  if (GetScForward(now_header) != uint8_t(Transforward::To4G)) {
     PrintLog("[Warning] SC recv: wrong forward");
     return -1;
   }
@@ -71,18 +64,19 @@ int SC::Recv(uint8_t* data, int data_length, int& lost_pack) {
     return sizeof(now_header);
   }
   // Check id
-  if (memcmp(now_header.id, recv_header_.id, sizeof(SCHeader::id))) {
+  if (recv_header_.ueid != now_header.ueid) {
     PrintLog("[Warning] SC recv: id not match");
     return -1;
   }
-  recv_header_.sequence_number++;
-  uint16_t lost = now_header.sequence_number - recv_header_.sequence_number;
-  if (lost > std::numeric_limits<uint16_t>::max() >> 1) {
-    // Out of order
+  SetScSn(recv_header_, GetScSn(recv_header_) + 1);
+  int lost = GetScSn(now_header) - GetScSn(recv_header_);
+  if (lost > std::numeric_limits<uint32_t>::max() >> 1) {
+    PrintLog("[Notice] Out of order");
+    printf("id = %u\n", GetScSn(now_header));
     return -1;
   }
   lost_pack = lost;
-  recv_header_.sequence_number = now_header.sequence_number;
+  SetScSn(recv_header_, GetScSn(now_header));
   return sizeof(recv_header_);
 }
 

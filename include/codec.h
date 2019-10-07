@@ -30,8 +30,6 @@ struct MediaParam {
   int payload_type;
   uint32_t clock_rate;
   uint32_t samples_pre_frames;
-  uint32_t byte_pre_frame;
-  uint32_t frames_pre_packet;
 };
 
 /**

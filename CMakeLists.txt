@@ -44,4 +44,4 @@ set(COMMON_LIB
 add_executable(${PROJECT_NAME}  "src/main.cpp")
 target_link_libraries(${PROJECT_NAME} ${COMMON_LIB})
 add_subdirectory(test)
-#add_subdirectory(codec_server)
+add_subdirectory(codec_server)

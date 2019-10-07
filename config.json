@@ -1,14 +1,20 @@
 {
-    "sender": {
-        "local_port": 60000,
-        "ip": "162.105.85.63",
-        "remote_port": 8001,
-        "packets": 2000,
-        "frame_pre_packet": 3
-    },
-    "decode": {
-        "recv_port": 8001,
-        "send_ip": "127.0.0.1",
-        "send_port": 8002
+  "session": [
+    // {
+    //   "src_codec": "PCMU",
+    //   "dst_codec": "codec2",
+    //   "forward": "From4G",
+    //   "recv_port": 8088,
+    //   "ip": "127.0.0.1",
+    //   "send_port": 8089
+    // },
+    {
+      "src_codec": "codec2",
+      "dst_codec": "PCMU",
+      "forward": "TO4G",
+      "recv_port": 8001,
+      "ip": "162.105.85.71",
+      "send_port": 8090
     }
+  ]
 }

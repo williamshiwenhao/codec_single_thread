@@ -8,11 +8,16 @@
  * @copyright Copyright (c) 2019
  *
  */
+#include <signal.h>
+#include <sys/time.h>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -33,26 +38,23 @@ const int kCodecUnit = 1;
 
 class Timer {
  public:
-  void Start();
-  void Stop() {
-    work_ = false;
-    while (!work_)
-      ;
-  }
-  void SetClock(int millisecond) { millisecond_ = millisecond; }
+  void Tick();
   void Wait();
+  static Timer* GetTimer() {
+    static Timer* timer = nullptr;
+    if (timer == nullptr) {
+      timer = new Timer();
+    }
+    return timer;
+  }
 
  private:
-  void Tick();
-  std::atomic<bool> work_;
   std::condition_variable cv_;
-  int millisecond_ = 20;
 };
 
-void Timer::Start() {
-  work_ = true;
-  std::thread th(&Timer::Tick, this);
-  th.detach();
+void ClockClick(int signo) {
+  Timer* timer = Timer::GetTimer();
+  timer->Tick();
 }
 
 void Timer::Wait() {
@@ -61,13 +63,7 @@ void Timer::Wait() {
   cv_.wait(locker);
 }
 
-void Timer::Tick() {
-  while (work_) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(millisecond_));
-    cv_.notify_one();
-  }
-  work_ = true;
-}
+void Timer::Tick() { cv_.notify_one(); }
 
 /**
  * @发送RTP流，使用VLC接收。测试编码模块和rtp模块
@@ -114,7 +110,6 @@ void SendTest() {
   media_param.payload_type = payload_type;
   media_param.clock_rate = 8000;
   media_param.samples_pre_frames = 160;
-  media_param.byte_pre_frame = 320;
   if (rtp.Init(media_param)) {
     fprintf(stderr, "[Error] Rtp session init error\n");
     return;
@@ -147,9 +142,16 @@ void SendTest() {
   }
   udp.SetSendIp(str_ip.c_str(), port);
   // Init timer
-  std::unique_ptr<Timer> timer(new Timer);
-  timer->SetClock(kCodecUnit * 20);
-  timer->Start();
+  signal(SIGALRM, ClockClick);
+  Timer* timer = Timer::GetTimer();
+  struct itimerval tick;
+  memset(&tick, 0, sizeof(tick));
+  tick.it_value.tv_usec = 20 * kCodecUnit * 1000;
+  tick.it_interval.tv_usec = 20 * kCodecUnit * 1000;
+  if (setitimer(ITIMER_REAL, &tick, NULL) < 0) {
+    fprintf(stderr, "[Error] Set timer error\n");
+    return;
+  }
   while (true) {
     char* p_frame = in_buff;
     int now_length = input_length;

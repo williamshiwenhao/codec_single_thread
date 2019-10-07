@@ -3,7 +3,7 @@
     "codec_type": "pcm"
   },
   "rtp_test": {
-    "ip": "127.0.0.1",
+    "ip": "162.105.85.71",
     "port": 8088,
     "payload type": 0,
     "codec type": "pcmu"

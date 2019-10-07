@@ -1,5 +1,7 @@
 #include "utils.h"
+#include "codec.h"
 
+#include <cstdint>
 #include <fstream>
 
 int ReadConfig(Json::Value& config, const char* file_path) {
@@ -18,4 +20,23 @@ int ReadConfig(Json::Value& config, const char* file_path) {
   }
   fd.close();
   return 0;
+}
+
+MediaParam GenerateDefaultParam(uint8_t type) {
+  static const MediaParam amr_wb{96, 16000, 320};
+  static const MediaParam codec2{96, 8000, 160};
+  static const MediaParam pcm_u{0, 8000, 1};
+  static const MediaParam pcm_a{8, 8000, 1};
+  switch (type) {
+    case CodecType::AMR_WB:
+      return amr_wb;
+    case CodecType::Codec2:
+      return codec2;
+    case CodecType::PcmA:
+      return pcm_a;
+    case CodecType::PcmU:
+      return pcm_u;
+  }
+  static const MediaParam empty{0, 0, 0};
+  return empty;
 }

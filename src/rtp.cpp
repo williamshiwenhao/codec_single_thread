@@ -86,9 +86,9 @@ int RtpSession::DecodeRtpHeader(uint8_t* pkt, const unsigned pkt_len,
     }
     return sizeof(RtpHeader);
   }
-  recv_frame = (pkt_len - sizeof(RtpHeader)) / param_.byte_pre_frame;
+  // recv_frame = (pkt_len - sizeof(RtpHeader)) / param_.byte_pre_frame;
   // recv_frame must >= 0, so change it to uin32_t directly
-  recv_header_.timestamp += (uint32_t)(recv_frame)*param_.samples_pre_frames;
+  // recv_header_.timestamp += (uint32_t)(recv_frame)*param_.samples_pre_frames;
   return sizeof(RtpHeader);
 }
 

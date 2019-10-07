@@ -16,3 +16,6 @@ target_link_libraries(rtp_test ${COMMON_LIB})
 
 add_executable(codec_test codec_test.cpp)
 target_link_libraries(codec_test ${COMMON_LIB})
+
+add_executable(codec_outoforder_test codec_outoforder_test.cpp)
+target_link_libraries(codec_outoforder_test ${COMMON_LIB})
