@@ -17,6 +17,7 @@
 
 const int kIpHeaderLen = 20;
 const int kUdpHeaderLen = 8;
+const int kUdpIpLen = kIpHeaderLen + kUdpHeaderLen;
 
 struct TransInfo {
   uint32_t src_ip;

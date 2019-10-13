@@ -62,6 +62,11 @@ int Session::Init(const SessionParam& param) {
     PrintLog("[Error] Session init error: cannot init sc session");
     return -1;
   }
+  // Init UdpPacker
+  if (param.if_add_udpip) {
+    udp_packer_.SetIpPort(param.udpip_sip, param.udpip_sport, param.udpip_dip,
+                          param.udpip_dport);
+  }
 
   // Init coder
   switch (param.encoder_type) {
@@ -206,7 +211,16 @@ void Session::RecvLoop(bool& work) {
       PrintLog("[Warning] Recv error");
       continue;
     }
-    len = Recv(buff.data(), len, codec_cache_.data() + (cached_sample_ << 1),
+    int base = 0;
+    if (param_.if_parse_udpip) {
+      base = UdpParser(buff.data(), len);
+      if (base < 0) {
+        PrintLog("[Warning] Parse UDP/IP error");
+        continue;
+      }
+    }
+    len = Recv(buff.data() + base, len - base,
+               codec_cache_.data() + (cached_sample_ << 1),
                codec_cache_.size() - (cached_sample_ << 1));
     if (len < 0) {
       PrintLog("[Warning] Recv error");
@@ -219,8 +233,23 @@ void Session::RecvLoop(bool& work) {
             param_.send_frame != 0)) {
       send_samples = param_.send_frame * kPcmFrameSample;
       if (send_samples == 0) send_samples = cached_sample_;
-      len = Send(codec_cache_.data(), send_samples << 1, buff_out_.data(),
-                 buff_out_.size());
+      if (param_.if_add_udpip) {
+        len = Send(codec_cache_.data(), send_samples << 1,
+                   buff_out_.data() + kUdpIpLen, buff_out_.size() - kUdpIpLen);
+        if (len < 0) {
+          PrintLog("[Error] Encode and send pack error");
+          return;
+        }
+        int udp_len = udp_packer_.GenerateHeader(buff_out_.data(), kUdpIpLen);
+        if (udp_len < 0) {
+          PrintLog("[Error] Generate udp header error");
+          return;
+        }
+        len += udp_len;
+      } else {
+        len = Send(codec_cache_.data(), send_samples << 1, buff_out_.data(),
+                   buff_out_.size());
+      }
       if (len <= 0) {
         PrintLog("[Error] Build send packet error");
       } else {

@@ -55,6 +55,7 @@ int UdpPacker::GenerateHeader(uint8_t* buff, int pack_len) {
   iphdr_.ip_len = htons(kIpHeaderLen + kUdpHeaderLen + pack_len);
 #endif  //__APPLE__
   // file checksum
+  iphdr_.ip_id = htons(ntohs(iphdr_.ip_id) + 1);
   iphdr_.ip_sum = 0;
   iphdr_.ip_sum = CheckSum((uint16_t*)&iphdr_, sizeof(iphdr_));
   udphdr_.uh_ulen = htons(kUdpHeaderLen + pack_len);

@@ -18,6 +18,7 @@
 #include "rtp.h"
 #include "sc.h"
 #include "udp.h"
+#include "udp_packer.h"
 #include "utils.h"
 
 #define SENT_RTCP
@@ -37,6 +38,9 @@ struct SessionParam {
   uint8_t decoder_type;
   uint32_t sc_id;
   int send_frame;
+  bool if_add_udpip, if_parse_udpip;
+  char udpip_sip[16], udpip_dip[16];
+  uint16_t udpip_sport, udpip_dport;
 };
 
 class Session {
@@ -86,6 +90,7 @@ class Session {
       std::vector<uint8_t>(kScFrames * kPcmFrameLength * 2)};
   int cached_sample_ = 0;
   UdpSocket sc_socket_, rtp_socket_;
+  UdpPacker udp_packer_;
   Coder *decoder_ = nullptr, *encoder_ = nullptr;
   RtpSession rtp_session_;
   SC sc_session_;
