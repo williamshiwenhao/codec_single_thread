@@ -11,6 +11,13 @@
 #include "session.h"
 #include "utils.h"
 
+int UploadSession::Init(SessionParam param) {
+  param_ = param;
+  first_pack_ = true;
+  MediaParam send_media_param = GenerateDefaultParam(param.encode_type);
+  rtp_.Init(send_media_param);
+}
+
 int Session::Init(const SessionParam& param) {
   param_ = param;
   // Parameter check
