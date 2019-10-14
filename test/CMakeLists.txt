@@ -19,3 +19,6 @@ target_link_libraries(codec_test ${COMMON_LIB})
 
 add_executable(codec_outoforder_test codec_outoforder_test.cpp)
 target_link_libraries(codec_outoforder_test ${COMMON_LIB})
+
+add_executable(udp_packer_test udp_packer_test.cpp)
+target_link_libraries(udp_packer_test ${COMMON_LIB})

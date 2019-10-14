@@ -7,5 +7,12 @@
     "port": 8088,
     "payload type": 0,
     "codec type": "pcmu"
+  },
+  "udp_packer_test": {
+    "src_ip": "127.0.0.1",
+    "dst_ip": "127.0.0.1",
+    "src_port": 60001,
+    "dst_port": 60002,
+    "test_num": 10
   }
 }
