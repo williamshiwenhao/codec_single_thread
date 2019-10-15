@@ -173,7 +173,10 @@ void UploadSession::ProcessLoop() {
       PrintLog("[Warning] Send process error");
       continue;
     }
-    send_socket_.Send((char*)send_buff.data(), send_length);
+    int send_len = send_socket_.Send((char*)send_buff.data(), send_length);
+    if (send_len <= 0) {
+      PrintLog("[Warning] Upload send warning");
+    }
   }
 }
 
@@ -357,7 +360,10 @@ void DownloadSession::ProcessLoop(int send_frame) {
         PrintLog("[Warning] Send process error");
         continue;
       }
-      send_socket_.Send((char*)send_buff.data(), send_length);
+      int send_len = send_socket_.Send((char*)send_buff.data(), send_length);
+      if (send_len <= 0) {
+        PrintLog("[Warning] Upload send warning");
+      }
     }
   }
 }

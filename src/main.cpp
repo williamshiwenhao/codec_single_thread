@@ -56,7 +56,7 @@ int main() {
     std::string to_ip = config["ip"].asString();
     unsigned to_port = config["send_port"].asUInt();
     bool if_add_udpip = config["add_udpip"].asBool();
-    bool if_parse_udpip = config["parse_udpip"].asBool();
+    bool if_send_sc = config["send_sc"].asBool();
     std::string udpip_sip, udpip_dip;
     uint16_t udpip_sport, udpip_dport;
     if (if_add_udpip) {
@@ -79,7 +79,7 @@ int main() {
     printf("[Send to IP] %s\n", to_ip.c_str());
     printf("[Send to port] %u\n", to_port);
     printf("[Send UDP/IP] %s\n", if_add_udpip ? "True" : "False");
-    printf("[Parse UDP/IP] %s \n", if_parse_udpip ? "True" : "False");
+    printf("[Send SC] %s \n", if_send_sc ? "True" : "False");
     if (if_add_udpip) {
       printf("[UDPIP SIP] %s\n", udpip_sip.c_str());
       printf("[UDPIP DIP] %s\n", udpip_dip.c_str());
@@ -99,7 +99,7 @@ int main() {
     param.remote_port = (uint16_t)to_port;
     param.ueid = 0x20;
     param.if_add_udpip = if_add_udpip;
-    param.if_send_sc = if_parse_udpip;
+    param.if_send_sc = if_send_sc;
     if (if_add_udpip) {
       strcpy(param.udpip_sip, udpip_sip.c_str());
       strcpy(param.udpip_dip, udpip_dip.c_str());
