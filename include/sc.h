@@ -12,6 +12,7 @@
 #define __SC_H__
 
 #include <cstdint>
+#include "utils.h"
 const size_t kSCHeadSize = 12;
 const int kScFrames = 3;
 
@@ -64,8 +65,8 @@ inline void ScCopyFromNet(SCHeader* to, SCHeader* from) {
 
 class SC {
  public:
-  int Init(uint32_t ueid);
-  int ResetSend(uint32_t ueid);
+  int Init(uint32_t ueid, Transforward forward = Transforward::To4G,
+           uint32_t sn = 0);
   int ResetRecv();
 
   /**
@@ -79,6 +80,9 @@ class SC {
   int Send(uint16_t payload_length, uint8_t* buff, int buff_length);
 
   int Recv(uint8_t* data, int data_length, int& lost_pack);
+
+  uint32_t GetUEID() { return recv_header_.ueid; }
+  uint32_t GetSn() { return GetScSn(recv_header_); }
 
  private:
   bool CheckHeadSize();

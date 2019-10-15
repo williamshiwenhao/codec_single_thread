@@ -7,16 +7,14 @@
 #include "sc.h"
 #include "utils.h"
 
-int SC::Init(uint32_t ueid) {
-  if (ResetSend(ueid)) return -1;
-  return ResetRecv();
-}
-
-int SC::ResetSend(uint32_t ueid) {
+int SC::Init(uint32_t ueid, Transforward forward, uint32_t sn) {
   if (!CheckHeadSize()) return -1;
   memset(&send_header_, 0, sizeof(send_header_));
+  memset(&recv_header_, 0, sizeof(recv_header_);
   send_header_.ueid = ueid;
-  SetScForward(send_header_, uint8_t(Transforward::From4G));
+  SetScForward(send_header_, uint8_t(forward));
+  SetScSn(send_header_, sn);
+  first_pack_ = true;
   return 0;
 }
 
@@ -53,16 +51,20 @@ int SC::Recv(uint8_t* data, int data_length, int& lost_pack) {
     printf("length = %d\n", now_header.length);
     return -1;
   }
-  // TODO: 注释下面的代码是为了测试方便，可以自环。正式使用时应当去除注释
-  if (GetScForward(now_header) != uint8_t(Transforward::To4G)) {
-    PrintLog("[Warning] SC recv: wrong forward");
-    return -1;
-  }
+
   if (first_pack_) {
     first_pack_ = false;
     recv_header_ = now_header;
     return sizeof(now_header);
   }
+
+  // TODO: 注释下面的代码是为了测试方便，可以自环。正式使用时应当去除注释
+  if (GetScForward(now_header) != GetScForward(recv_header_)) {
+    // FIXME:
+    PrintLog("[Warning] SC recv: wrong forward");
+    return -1;
+  }
+
   // Check id
   if (recv_header_.ueid != now_header.ueid) {
     PrintLog("[Warning] SC recv: id not match");

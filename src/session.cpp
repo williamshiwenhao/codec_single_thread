@@ -14,67 +14,19 @@
 int UploadSession::Init(SessionParam param) {
   param_ = param;
   first_pack_ = true;
-  MediaParam send_media_param = GenerateDefaultParam(param.encode_type);
+  MediaParam send_media_param = GenerateDefaultParam(param.encoder_type);
   rtp_.Init(send_media_param);
-}
-
-int Session::Init(const SessionParam& param) {
-  param_ = param;
-  // Parameter check
-  if (param.forward != uint8_t(Transforward::From4G) &&
-      param.forward != uint8_t(Transforward::To4G)) {
-    PrintLog("[Error] Session init error, forward error");
+  sc_send_.Init(param.ueid);
+  // Init Socket
+  if (recv_socket_.Init() || send_socket_.Init()) {
+    PrintLog("[Error] Socket init error");
     return -1;
   }
-  // Init socket
-  if ((param.rtp_port_base & 1) != 0) {
-    PrintLog("[Error] Rtp port should be even");
+  if (recv_socket_.Bind(param_.recv_port)) {
+    PrintLog("[Error] Socket bind error");
     return -1;
   }
-  /// Init socket and bind port
-  if (sc_socket_.Init()) {
-    PrintLog("[Error] Session init: cannot init sc socket");
-    return -1;
-  }
-  if (rtp_socket_.Init()) {
-    PrintLog("[Error] Session init: cannot init rtp socket");
-    return -1;
-  }
-  if (param.forward == uint8_t(Transforward::To4G)) {
-    if (sc_socket_.Bind(param.sc_port)) {
-      PrintLog("[Error] Session init: cannot bind sc socket");
-      return -1;
-    }
-  }
-  if (param.rtp_port_base != 0 && rtp_socket_.Bind(param.rtp_port_base)) {
-    PrintLog("[Error] Session init: cannot bind rtp socket");
-    return -1;
-  }
-  if (param.forward == uint8_t(Transforward::From4G)) {
-    sc_socket_.SetSendIp(param.ip, param.remote_port);
-    output_head_length_ = kSCHeadSize;
-    param_.send_frame = 3;
-  } else {
-    rtp_socket_.SetSendIp(param.ip, param.remote_port);
-    output_head_length_ = kRtpHeaderSize;
-    param_.send_frame = 0;
-  }
-
-  // Init rtp session and sc_session
-  if (rtp_session_.Init(param.rtp_media)) {
-    PrintLog("[Error] Session init error: cannot init rtp session");
-    return -1;
-  }
-  if (sc_session_.Init(param.sc_id)) {
-    PrintLog("[Error] Session init error: cannot init sc session");
-    return -1;
-  }
-  // Init UdpPacker
-  if (param.if_add_udpip) {
-    udp_packer_.SetIpPort(param.udpip_sip, param.udpip_sport, param.udpip_dip,
-                          param.udpip_dport);
-  }
-
+  send_socket_.SetSendIp(param.ip, param.remote_port);
   // Init coder
   switch (param.encoder_type) {
     case CodecType::AMR_WB:
@@ -121,47 +73,30 @@ int Session::Init(const SessionParam& param) {
   return 0;
 }
 
-Session::~Session() {
+UploadSession::~UploadSession() {
   if (encoder_) delete encoder_;
   if (decoder_) delete decoder_;
 }
 
-UdpSocket* Session::GetSocket() {
-  if (param_.forward == uint8_t(Transforward::From4G)) {
-    return &rtp_socket_;
-  }
-  return &sc_socket_;
-}
-
-// TODO: media param 中不应该有frames_pre_packet
-int Session::Recv(uint8_t* input, int input_length, uint8_t* output,
-                  int output_length) {
-  // Decode head
-  int lost_samples = 0;
-  int recv_frames;
+int UploadSession::Recv(uint8_t* data, int len, uint8_t* output,
+                        int output_len) {
   int status;
-  int recv_samples;
-  if (param_.forward == uint8_t(Transforward::From4G)) {
-    status = rtp_session_.DecodeRtpHeader(input, input_length, lost_samples,
-                                          recv_frames);
-    recv_samples = param_.rtp_media.samples_pre_frames;
-  } else {
-    int lost_pack = 0;
-    status = sc_session_.Recv(input, input_length, lost_pack);
-    lost_samples = lost_pack * param_.sc_media.samples_pre_frames *
-                   param_.sc_samples_pre_packet;
-    recv_samples =
-        param_.sc_media.samples_pre_frames * param_.sc_samples_pre_packet;
-    recv_frames = param_.sc_samples_pre_packet;
+  int lost_pack = 0;
+  status = sc_recv_.Recv(data, len, lost_pack);
+  if (first_pack_) {
+    first_pack_ = false;
+    sc_send_.Init(sc_recv_.GetUEID, Transforward::To4G, sc_recv_.GetSn());
   }
+  int recv_frame = kScFrames;
+  int recv_samples = recv_frame * kPcmFrameSample;
   if (status < 0) {
     PrintLog("[Warning] Session codec: decode head warning");
     return -1;
   }
-  input += status;
-  input_length -= status;
+  data += status;
+  len -= status;
   // Decode frame
-  status = decoder_->Codec(input, input_length, output, output_length);
+  status = decoder_->Codec(data, len, output, output_len);
   if (status < 0) {
     PrintLog("[Warning] Session codec: decode frame error");
     return -1;
@@ -169,105 +104,237 @@ int Session::Recv(uint8_t* input, int input_length, uint8_t* output,
   return status;
 }
 
-int Session::Send(uint8_t* input, int input_length, uint8_t* output,
-                  int output_length) {
-  int status;
-  // Encode frame
-  int codec_len =
-      encoder_->Codec(input, input_length, output + output_head_length_,
-                      output_length - output_head_length_);
+int UploadSession::Send(uint8_t* input, int input_len, uint8_t* output,
+                        int output_len) {
+  if (param_.if_send_sc) {
+    output += kSCHeadSize;
+    output_len -= kSCHeadSize;
+  }
+  if (param_.if_add_udpip) {
+    output += kUdpIpLen;
+    output_len -= kUdpIpLen;
+  }
+  output += kRtpHeaderSize;
+  int len = 0;
+  output_len -= kRtpHeaderSize;
+  int codec_len = encoder_->Codec(input, input_length, output, output_len);
   if (codec_len < 0) {
     PrintLog("[Warning] Session codec: encode error");
-    codec_len = encoder_->GetWhite(output + output_head_length_,
-                                   output_length - output_head_length_,
-                                   input_length >> 1);
-    if (codec_len < 0) {
-      PrintLog("[Warning] Session codec: try to get white frames but failed");
-      return -1;
-    }
-  }
-  // Encode head
-  if (param_.forward == uint8_t(Transforward::From4G)) {
-    status = sc_session_.Send(codec_len, output, output_length);
-  } else {
-    status = rtp_session_.GenerateRtpHeader(output, output_length,
-                                            input_length >> 1);
-  }
-  if (status < 0) {
-    PrintLog("[Warning] Session codec: encode head error");
     return -1;
   }
-  return status + codec_len;
+  len += codec_len;
+  output -= kRtpHeaderSize;
+  int rtp_len = rtp_.GenerateRtpHeader(output, kRtpHeaderSize, kScFrames);
+  if (rtp_len < 0) {
+    PrintLog("[Warning] Session send: rtp error");
+    return -1;
+  }
+  len += rtp_len;
+  if (param_.if_add_udpip) {
+    output -= kUdpIpLen;
+    int udp_len = udp_.GenerateHeader(output, kUdpIpLen);
+    if (udp_len < 0) {
+      PrintLog("[Warning] Session send: udp error");
+      return -1;
+    }
+    len += udp_len;
+  }
+  if (param_.if_send_sc) {
+    output -= kSCHeadSize;
+    int sc_len = sc_send_.Send(len, output, kSCHeadSize);
+    if (sc_len < 0) {
+      PrintLog("[Warning] Session send: sc error");
+      return -1;
+    }
+    len += sc_len;
+  }
+  return len;
 }
 
-void Session::RecvLoop(bool& work) {
-  int pack_id = 0;
-  std::vector<uint8_t> buff(kBuffSize);
-  UdpSocket *recv_socket, *send_socket;
-  int send_samples;
-  if (param_.forward == uint8_t(Transforward::From4G)) {
-    recv_socket = &rtp_socket_;
-    send_socket = &sc_socket_;
-  } else {
-    recv_socket = &sc_socket_;
-    send_socket = &rtp_socket_;
-  }
-  while (work) {
-    int len = recv_socket->RecvFrom((char*)buff.data(), buff.size());
-    if (len <= 0) {
+void UploadSession::ProcessLoop() {
+  std::vector<uint8_t> recv_buff(65536), codec_buff(65536), send_buff(65536);
+  while (true) {
+    int recv_len =
+        recv_socket_.RecvFrom((char*)recv_buff.data(), recv_buff.size());
+    if (recv_len <= 0) {
+      PrintLog("[Warning] Receive error");
+      continue;
+    }
+    int codec_length =
+        Recv(recv_buff.data(), recv_len, codec_buff.data(), codec_buff.size());
+    if (codec_length < 0) {
       PrintLog("[Warning] Recv error");
       continue;
     }
-    int base = 0;
-    if (param_.if_parse_udpip) {
-      base = UdpParser(buff.data(), len);
-      if (base < 0) {
-        PrintLog("[Warning] Parse UDP/IP error");
+    int send_length = Send(codec_buff.data(), codec_length, send_buff.data(),
+                           send_buff.size());
+    if (send_length <= 0) {
+      PrintLog("[Warning] Send process error");
+      continue;
+    }
+    send_socket_.Send((char*)send_buff.data(), send_length);
+  }
+}
+
+int DownloadSession::Init(const SessionParam param) {
+  param_ = param;
+  first_pack_ = true;
+  MediaParam send_media_param = GenerateDefaultParam(param.encoder_type);
+  rtp_.Init(send_media_param);
+  sc_send_.Init(param.ueid);
+  // Init Socket
+  if (recv_socket_.Init() || send_socket_.Init()) {
+    PrintLog("[Error] Socket init error");
+    return -1;
+  }
+  if (recv_socket_.Bind(param_.recv_port)) {
+    PrintLog("[Error] Socket bind error");
+    return -1;
+  }
+  send_socket_.SetSendIp(param.ip, param.remote_port);
+  // Init coder
+  switch (param.encoder_type) {
+    case CodecType::AMR_WB:
+      encoder_ = new AmrWbEnCoder();
+      break;
+    case CodecType::Codec2:
+      encoder_ = new Codec2EnCoder();
+      break;
+    case CodecType::PcmA:
+      encoder_ = new PcmAEnCoder();
+      break;
+    case CodecType::PcmU:
+      encoder_ = new PcmUEnCoder();
+      break;
+    default:
+      PrintLog("[Error] Session error, unrecognized encoder type");
+      return -1;
+  }
+  switch (param.decoder_type) {
+    case CodecType::AMR_WB:
+      decoder_ = new AmrWbDeCoder();
+      break;
+    case CodecType::Codec2:
+      decoder_ = new Codec2DeCoder();
+      break;
+    case CodecType::PcmA:
+      decoder_ = new PcmADeCoder();
+      break;
+    case CodecType::PcmU:
+      decoder_ = new PcmUDeCoder();
+      break;
+    default:
+      PrintLog("[Error] Session error, unrecognized decoder type");
+      return -1;
+  }
+  if (encoder_->Init()) {
+    PrintLog("[Error] Session init error, encoder init error");
+    return -1;
+  }
+  if (decoder_->Init()) {
+    PrintLog("[Error] Session init error, decoder init error");
+    return -1;
+  }
+  return 0;
+}
+
+int DownloadSession::Recv(uint8_t* input, int input_length, uint8_t* output,
+                          int output_length) {
+  if (param_.if_send_sc) {
+    int lost_pack;
+    int sc_len = sc_recv_.Recv(input, input_length, lost_pack);
+    if (sc_len < 0) {
+      PrintLog("[Error] Recv sc error\n");
+      return -1;
+    }
+    if (lost_pack) {
+      PrintLog("[Warning] Recv sc lost");
+    }
+    input += kSCHeadSize;
+    input_length -= kSCHeadSize;
+  }
+  if (param_.if_add_udpip) {
+    int udpip_len = UdpParser(input, input_length);
+    if (udpip_len < 0) {
+      PrintLog("[Error] Recv udpip error");
+      return -1;
+    }
+    input += udpip_len;
+    input_length -= udpip_len;
+  }
+  int lost_frame = 0;
+  int recv_frame = 0;
+  int rtp_len =
+      rtp_.DecodeRtpHeader(input, input_length, lost_frame, recv_frame);
+  if (rtp_len < 0) {
+    PrintLog("[Error] Rtp recv error");
+    return -1;
+  }
+  if (lost_frame) {
+    PrintLog("[Warning] RTP lost frame");
+  }
+  input += rtp_len;
+  input_length -= rtp_len;
+  int codec_length =
+      decoder_->Codec(input, input_length, output, output_length);
+  if (codec_length < 0) {
+    PrintLog("[Error] Codec error");
+    return -1;
+  }
+  if (codec_length != recv_frame << 1) {
+    PrintLog("[Error] Error rtp frame and decode frame");
+    return -1;
+  }
+  return codec_length;
+}
+
+int DownloadSession::Send(uint8_t* input, int input_length, uint8_t* output,
+                          int output_length) {
+  output += kSCHeadSize;
+  output_length -= kSCHeadSize;
+  if (input_length != kScFrames * kPcmFrameLength) {
+    PrintLog("[Error]Senssion send, wrong length");
+    return -1;
+  }
+  int codec_len = encoder_->Codec(input, input_length, output, output_length);
+  if (codec_len < 0) {
+    PrintLog("[Waring] Downl Session error, codec error");
+    return -1;
+  }
+  output -= kSCHeadSize;
+  int sc_len = sc_send_.Send(codec_len, output, kSCHeadSize);
+  if (sc_len < 0) {
+    PrintLog("[Error] DOwnoad session sc send error");
+    return -1;
+  }
+  return sc_len + codec_len;
+}
+
+void DownloadSession::ProcessLoop(int send_frame) {
+  std::vector<uint8_t> recv_buff(65536), codec_buff(65536), send_buff(65536);
+  std::deque<uint8_t> frame_buff(65536);
+  while (true) {
+    int recv_len =
+        recv_socket_.RecvFrom((char*)recv_buff.data(), recv_buff.size());
+    if (recv_len <= 0) {
+      PrintLog("[Warning] Receive error");
+      continue;
+    }
+    int codec_length =
+        Recv(recv_buff.data(), recv_len, codec_buff.data(), codec_buff.size());
+    if (codec_length < 0) {
+      PrintLog("[Warning] Recv error");
+      continue;
+    }
+    if (codec_length == send_frame << 1 && frame_buff.empty()) {
+      int send_length = Send(codec_buff.data(), codec_length, send_buff.data(),
+                             send_buff.size());
+      if (send_length <= 0) {
+        PrintLog("[Warning] Send process error");
         continue;
       }
+      send_socket_.Send((char*)send_buff.data(), send_length);
     }
-    len = Recv(buff.data() + base, len - base,
-               codec_cache_.data() + (cached_sample_ << 1),
-               codec_cache_.size() - (cached_sample_ << 1));
-    if (len < 0) {
-      PrintLog("[Warning] Recv error");
-      continue;
-    } else {
-      cached_sample_ += len >> 1;
-    }
-    while ((cached_sample_ > 0 && param_.send_frame == 0) ||
-           (cached_sample_ >= param_.send_frame * kPcmFrameSample &&
-            param_.send_frame != 0)) {
-      send_samples = param_.send_frame * kPcmFrameSample;
-      if (send_samples == 0) send_samples = cached_sample_;
-      if (param_.if_add_udpip) {
-        len = Send(codec_cache_.data(), send_samples << 1,
-                   buff_out_.data() + kUdpIpLen, buff_out_.size() - kUdpIpLen);
-        if (len < 0) {
-          PrintLog("[Error] Encode and send pack error");
-          return;
-        }
-        int udp_len = udp_packer_.GenerateHeader(buff_out_.data(), kUdpIpLen);
-        if (udp_len < 0) {
-          PrintLog("[Error] Generate udp header error");
-          return;
-        }
-        len += udp_len;
-      } else {
-        len = Send(codec_cache_.data(), send_samples << 1, buff_out_.data(),
-                   buff_out_.size());
-      }
-      if (len <= 0) {
-        PrintLog("[Error] Build send packet error");
-      } else {
-        send_socket->Send((char*)buff_out_.data(), len);
-        printf("Send pack %d\n", pack_id++);
-      }
-      cached_sample_ -= send_samples;
-      if (cached_sample_ > 0) {
-        for (int i = 0; i < cached_sample_; ++i)
-          codec_cache_[i] = codec_cache_[i + send_samples];
-      }
-    }
+    // TODO: Unfinished
   }
 }
