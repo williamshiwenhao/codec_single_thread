@@ -8,7 +8,8 @@
 #include "udp_packer.h"
 
 uint16_t CheckSum(uint16_t* addr, int len);
-
+uint16_t UdpChecksum(uint16_t* feakheader, int feakheader_len, uint16_t* data,
+                     int len);
 int UdpPacker::SetIpPort(const char* src_ip, uint16_t src_port,
                          const char* dst_ip, uint16_t dst_port) {
   int status;
@@ -44,6 +45,7 @@ int UdpPacker::SetIpPort(const char* src_ip, uint16_t src_port,
   udp_feak_header_.proto = IPPROTO_UDP;
   udp_feak_header_.src_port = udphdr_.uh_sport;
   udp_feak_header_.dst_port = udphdr_.uh_dport;
+  udp_feak_header_.sum = 0;
 
   return 0;
 }
@@ -60,10 +62,16 @@ int UdpPacker::GenerateHeader(uint8_t* buff, int pack_len) {
   iphdr_.ip_sum = CheckSum((uint16_t*)&iphdr_, sizeof(iphdr_));
   udphdr_.uh_ulen = htons(kUdpHeaderLen + pack_len);
   udp_feak_header_.udp_len = udp_feak_header_.len = udphdr_.uh_ulen;
+  printf("sizeof udp feak header = %u\n", sizeof(udp_feak_header_));
+  udp_feak_header_.sum = 0;
   udphdr_.uh_sum =
-      CheckSum((uint16_t*)&udp_feak_header_, sizeof(udp_feak_header_));
+      UdpChecksum((uint16_t*)&udp_feak_header_, sizeof(udp_feak_header_),
+                  (uint16_t*)(buff + kUdpIpLen), pack_len - kUdpIpLen);
+  udphdr_.uh_sum = 0;
   memcpy(buff, &iphdr_, sizeof(iphdr_));
   memcpy(buff + sizeof(iphdr_), &udphdr_, sizeof(udphdr_));
+  printf("IP checksum 0x%x, UDP checksum 0x%x\n", iphdr_.ip_sum,
+         udphdr_.uh_sum);
   return UdpPacker::GetUdpIpLen();
 }
 
@@ -83,6 +91,29 @@ uint16_t CheckSum(uint16_t* addr, int len) {
     sum += answer;
   }
 
+  sum = (sum >> 16) + (sum & 0xFFFF);
+  sum += (sum >> 16);
+  answer = ~sum;
+  return (answer);
+}
+
+uint16_t UdpChecksum(uint16_t* feakheader, int feakheader_len, uint16_t* data,
+                     int len) {
+  int sum = 0;
+  uint16_t answer = 0;
+  uint16_t* p = feakheader;
+  for (int i = 0; i<feakheader_len>> 1; ++i) {
+    sum += *p++;
+  }
+  p = data;
+  while (len > 1) {
+    sum += *p++;
+    len -= sizeof(uint16_t);
+  }
+  if (len == 1) {
+    *(uint8_t*)(&answer) = *(uint8_t*)p;
+    sum += answer;
+  }
   sum = (sum >> 16) + (sum & 0xFFFF);
   sum += (sum >> 16);
   answer = ~sum;

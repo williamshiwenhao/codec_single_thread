@@ -50,12 +50,18 @@ class UdpPacker {
   struct {
     uint32_t src_ip;
     uint32_t dst_ip;
+#if __BYTE_ORDER == __BIG_ENDIAN
     uint8_t zero;
     uint8_t proto;
+#else
+    uint8_t proto;
+    uint8_t zero;
+#endif
     uint16_t udp_len;
     uint16_t src_port;
     uint16_t dst_port;
     uint16_t len;
+    uint16_t sum;
   } udp_feak_header_;
 };
 
