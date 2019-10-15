@@ -16,7 +16,7 @@ int UploadSession::Init(SessionParam param) {
   first_pack_ = true;
   MediaParam send_media_param = GenerateDefaultParam(param.encoder_type);
   rtp_.Init(send_media_param);
-  sc_send_.Init(param.ueid);
+  sc_recv_.Init(param.ueid);
   // Init Socket
   if (recv_socket_.Init() || send_socket_.Init()) {
     PrintLog("[Error] Socket init error");
@@ -24,6 +24,7 @@ int UploadSession::Init(SessionParam param) {
   }
   if (recv_socket_.Bind(param_.recv_port)) {
     PrintLog("[Error] Socket bind error");
+    printf("port = %u\n", param_.recv_port);
     return -1;
   }
   send_socket_.SetSendIp(param.ip, param.remote_port);
@@ -85,7 +86,7 @@ int UploadSession::Recv(uint8_t* data, int len, uint8_t* output,
   status = sc_recv_.Recv(data, len, lost_pack);
   if (first_pack_) {
     first_pack_ = false;
-    sc_send_.Init(sc_recv_.GetUEID, Transforward::To4G, sc_recv_.GetSn());
+    sc_send_.Init(sc_recv_.GetUEID(), Transforward::To4G, sc_recv_.GetSn());
   }
   int recv_frame = kScFrames;
   int recv_samples = recv_frame * kPcmFrameSample;
@@ -117,7 +118,7 @@ int UploadSession::Send(uint8_t* input, int input_len, uint8_t* output,
   output += kRtpHeaderSize;
   int len = 0;
   output_len -= kRtpHeaderSize;
-  int codec_len = encoder_->Codec(input, input_length, output, output_len);
+  int codec_len = encoder_->Codec(input, input_len, output, output_len);
   if (codec_len < 0) {
     PrintLog("[Warning] Session codec: encode error");
     return -1;
@@ -179,8 +180,8 @@ void UploadSession::ProcessLoop() {
 int DownloadSession::Init(const SessionParam param) {
   param_ = param;
   first_pack_ = true;
-  MediaParam send_media_param = GenerateDefaultParam(param.encoder_type);
-  rtp_.Init(send_media_param);
+  // MediaParam send_media_param = GenerateDefaultParam(param.encoder_type);
+  // rtp_.Init(send_media_param);
   sc_send_.Init(param.ueid);
   // Init Socket
   if (recv_socket_.Init() || send_socket_.Init()) {
@@ -270,9 +271,10 @@ int DownloadSession::Recv(uint8_t* input, int input_length, uint8_t* output,
     PrintLog("[Error] Rtp recv error");
     return -1;
   }
-  if (lost_frame) {
-    PrintLog("[Warning] RTP lost frame");
-  }
+  // FIXME:
+  // if (lost_frame) {
+  //   PrintLog("[Warning] RTP lost frame");
+  // }
   input += rtp_len;
   input_length -= rtp_len;
   int codec_length =
@@ -281,10 +283,12 @@ int DownloadSession::Recv(uint8_t* input, int input_length, uint8_t* output,
     PrintLog("[Error] Codec error");
     return -1;
   }
-  if (codec_length != recv_frame << 1) {
-    PrintLog("[Error] Error rtp frame and decode frame");
-    return -1;
-  }
+  // FIXME: RTP的recvframe 有buf
+  // if (codec_length != recv_frame << 1) {
+  //   printf("recv %d codec_length %d\n", recv_frame, codec_length);
+  //   PrintLog("[Error] Error rtp frame and decode frame");
+  //   return -1;
+  // }
   return codec_length;
 }
 
@@ -293,6 +297,7 @@ int DownloadSession::Send(uint8_t* input, int input_length, uint8_t* output,
   output += kSCHeadSize;
   output_length -= kSCHeadSize;
   if (input_length != kScFrames * kPcmFrameLength) {
+    printf("input_length %d\n", input_length);
     PrintLog("[Error]Senssion send, wrong length");
     return -1;
   }
@@ -311,8 +316,10 @@ int DownloadSession::Send(uint8_t* input, int input_length, uint8_t* output,
 }
 
 void DownloadSession::ProcessLoop(int send_frame) {
+  printf("Send frame %d\n", send_frame);
   std::vector<uint8_t> recv_buff(65536), codec_buff(65536), send_buff(65536);
   std::deque<uint8_t> frame_buff(65536);
+  frame_buff.clear();
   while (true) {
     int recv_len =
         recv_socket_.RecvFrom((char*)recv_buff.data(), recv_buff.size());
@@ -326,7 +333,8 @@ void DownloadSession::ProcessLoop(int send_frame) {
       PrintLog("[Warning] Recv error");
       continue;
     }
-    if (codec_length == send_frame << 1 && frame_buff.empty()) {
+    if ((codec_length == (send_frame << 1)) && frame_buff.empty()) {
+      printf("Get here\n");
       int send_length = Send(codec_buff.data(), codec_length, send_buff.data(),
                              send_buff.size());
       if (send_length <= 0) {
@@ -334,7 +342,22 @@ void DownloadSession::ProcessLoop(int send_frame) {
         continue;
       }
       send_socket_.Send((char*)send_buff.data(), send_length);
+    } else {
+      frame_buff.insert(frame_buff.end(), codec_buff.begin(),
+                        codec_buff.begin() + codec_length);
     }
-    // TODO: Unfinished
+    while (frame_buff.size() >= (send_frame << 1)) {
+      for (int i = 0; i < (send_frame << 1); ++i) {
+        codec_buff[i] = frame_buff.front();
+        frame_buff.pop_front();
+      }
+      int send_length = Send(codec_buff.data(), send_frame << 1,
+                             send_buff.data(), send_buff.size());
+      if (send_length <= 0) {
+        PrintLog("[Warning] Send process error");
+        continue;
+      }
+      send_socket_.Send((char*)send_buff.data(), send_length);
+    }
   }
 }

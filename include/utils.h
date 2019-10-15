@@ -14,7 +14,13 @@
 
 enum class Transforward : uint8_t { To4G = 0, From4G = 1 };
 
-enum class CodecType : uint8_t { AMR_WB = 1, Codec2 = 2, PcmA = 3, PcmU = 4 };
+enum class CodecType : uint8_t {
+  AMR_WB = 1,
+  Codec2 = 2,
+  PcmA = 3,
+  PcmU = 4,
+  Err = 255
+};
 
 int ReadConfig(Json::Value& config, const char* file_path);
 MediaParam GenerateDefaultParam(CodecType type);
@@ -24,13 +30,13 @@ inline CodecType StringToType(const std::string& str) {
   if (str == "codec2" || str == "Codec2") return (CodecType::Codec2);
   if (str == "PCMA" || str == "PcmA") return (CodecType::PcmA);
   if (str == "PCMU" || str == "PcmU") return (CodecType::PcmU);
-  return 0;
+  return CodecType::Err;
 }
 
-inline uint8_t StringToForward(const std::string& str) {
-  if (str == "To4G" || str == "TO4G") return (uint8_t)Transforward::To4G;
-  if (str == "From4G" || str == "FROM4G") return (uint8_t)Transforward::From4G;
-  return 3;
+inline Transforward StringToForward(const std::string& str) {
+  if (str == "To4G" || str == "TO4G") return Transforward::To4G;
+  if (str == "From4G" || str == "FROM4G") return Transforward::From4G;
+  return Transforward::To4G;
 }
 
 #endif

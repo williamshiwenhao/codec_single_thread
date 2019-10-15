@@ -10,7 +10,7 @@
 int SC::Init(uint32_t ueid, Transforward forward, uint32_t sn) {
   if (!CheckHeadSize()) return -1;
   memset(&send_header_, 0, sizeof(send_header_));
-  memset(&recv_header_, 0, sizeof(recv_header_);
+  memset(&recv_header_, 0, sizeof(recv_header_));
   send_header_.ueid = ueid;
   SetScForward(send_header_, uint8_t(forward));
   SetScSn(send_header_, sn);
@@ -26,7 +26,7 @@ int SC::ResetRecv() {
 }
 
 int SC::Send(uint16_t payload_length, uint8_t* buff, int buff_length) {
-  if (buff_length < (int)payload_length + (int)sizeof(SCHeader)) {
+  if (buff_length < (int)sizeof(SCHeader)) {
     PrintLog("[Warning] No enough memory for SC packet");
     return -1;
   }

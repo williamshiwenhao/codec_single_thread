@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -16,9 +17,21 @@
 const char* kConfigFile = "config.json";
 const int kScSamplePrePacket = 480;
 
-void Loop(Session& s) {
-  bool work = true;
-  s.RecvLoop(work);
+void UpLoop(SessionParam param) {
+  UploadSession session;
+  if (session.Init(param)) {
+    printf("[Error] Cannot init upload session");
+    return;
+  }
+  session.ProcessLoop();
+}
+void DownLoop(SessionParam param) {
+  DownloadSession session;
+  if (session.Init(param)) {
+    printf("[Error] Cannot init upload session");
+    return;
+  }
+  session.ProcessLoop();
 }
 
 int main() {
@@ -33,7 +46,6 @@ int main() {
     return -1;
   }
   std::vector<std::thread> th;
-  std::vector<Session> session_q(root.size());
   for (int i = 0; i < root.size(); ++i) {
     Json::Value config = root[i];
     SessionParam param;
@@ -77,44 +89,31 @@ int main() {
     printf("-----------------------------\n\n");
     param.encoder_type = StringToType(dst_codec);
     param.decoder_type = StringToType(src_codec);
-    if (param.encoder_type == 0 || param.decoder_type == 0) {
+    param.recv_port = recv_port;
+    if (param.encoder_type == CodecType::Err ||
+        param.decoder_type == CodecType::Err) {
       fprintf(stderr, "[Error] Config error, codec type error\n");
       return -1;
     }
-    param.forward = StringToForward(str_forward);
-    if (param.forward >= 3) {
-      fprintf(stderr, "[Error] Config forward error\n");
-      return -1;
-    }
-    if (param.forward == (uint8_t)Transforward::From4G) {
-      param.rtp_port_base = recv_port;
-      param.sc_media = GenerateDefaultParam(param.encoder_type);
-      param.rtp_media = GenerateDefaultParam(param.decoder_type);
-    } else {
-      param.rtp_port_base = 0;
-      param.sc_port = recv_port;
-      param.sc_media = GenerateDefaultParam(param.decoder_type);
-      param.rtp_media = GenerateDefaultParam(param.encoder_type);
-    }
-    param.sc_samples_pre_packet = kScSamplePrePacket;
     strcpy(param.ip, to_ip.c_str());
     param.remote_port = (uint16_t)to_port;
-    param.sc_id = 0x20;
+    param.ueid = 0x20;
     param.if_add_udpip = if_add_udpip;
-    param.if_parse_udpip = if_parse_udpip;
+    param.if_send_sc = if_parse_udpip;
     if (if_add_udpip) {
       strcpy(param.udpip_sip, udpip_sip.c_str());
       strcpy(param.udpip_dip, udpip_dip.c_str());
       param.udpip_sport = udpip_sport;
       param.udpip_dport = udpip_dport;
     }
-    if (session_q[i].Init(param)) {
-      fprintf(stderr, "[Error] Session init error\n");
-      return -1;
+    if (StringToForward(str_forward) == Transforward::To4G) {
+      th.emplace_back(UpLoop, param);
+    } else {
+      th.emplace_back(DownLoop, param);
     }
-    th.emplace_back(Loop, std::ref(session_q[i]));
   }
   for (auto& t : th) t.join();
+
   /************************************
    * Create work thread
    ************************************/

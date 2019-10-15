@@ -58,7 +58,10 @@ class UploadSession {
 
 class DownloadSession {
  public:
-  ~DownloadSession();
+  ~DownloadSession() {
+    if (encoder_) delete encoder_;
+    if (decoder_) delete decoder_;
+  }
   int Init(const SessionParam param);
   int Recv(uint8_t *data, int len, uint8_t *output, int output_len);
   int Send(uint8_t *data, int len, uint8_t *output, int output_len);
