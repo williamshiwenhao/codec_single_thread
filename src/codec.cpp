@@ -252,8 +252,23 @@ AmrWbEnCoder::~AmrWbEnCoder() {
   }
 }
 
+static int AMRNoOctetAlign(uint8_t* tar, uint8_t* src, int len) {
+  tar[0] = 0xf0 | (src[0] >> 4);
+  tar[1] = (src[0] << 4) & 0xc0;
+  int offset = 1;
+  for (; offset < len; offset++) {
+    tar[offset] = tar[offset] | (src[offset] >> 2);
+    tar[offset + 1] = (src[offset] << 6) & 0xc0;
+  }
+  if (tar[len] == 0)
+    return len;
+  else
+    return len + 1;
+}
+
 int AmrWbEnCoder::Codec(uint8_t* input, const int length, uint8_t* output,
                         int output_length) {
+  uint8_t align_buff[128];
   if (length <= 0) {
     PrintLog("[Error] Amr Encoder error, input length < 0");
     return -1;
@@ -279,11 +294,16 @@ int AmrWbEnCoder::Codec(uint8_t* input, const int length, uint8_t* output,
   while (last_frames >= kAmrWbFrameSample) {
     codec_size = E_IF_encode(coder_base_, kAmrEncodeMode, in_frame, amr_buff_,
                              kAmrAllowDtx);
+    memset(align_buff, 0, sizeof(align_buff));
+    int align_len = AMRNoOctetAlign(align_buff, amr_buff_, codec_size);
+    align_len++;
+    printf("align_len = %d\tcodec_size = %d\n", align_len, codec_size);
+    codec_size = align_len;
     if (output_length < codec_size) {
       PrintLog("[Warning] Amr encoder: no enough memory for output");
       break;
     }
-    memcpy(output, amr_buff_, codec_size);
+    memcpy(output, align_buff, codec_size);
     output += codec_size;
     output_length -= codec_size;
     total_size += codec_size;

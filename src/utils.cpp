@@ -23,7 +23,7 @@ int ReadConfig(Json::Value& config, const char* file_path) {
 }
 
 MediaParam GenerateDefaultParam(CodecType type) {
-  static const MediaParam amr_wb{96, 16000, 320};
+  static const MediaParam amr_wb{99, 16000, 320};
   static const MediaParam codec2{96, 8000, 160};
   static const MediaParam pcm_u{0, 8000, 160};
   static const MediaParam pcm_a{8, 8000, 160};

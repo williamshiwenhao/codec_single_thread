@@ -44,7 +44,7 @@ class UploadSession {
   int Init(const SessionParam param);
   int Recv(uint8_t *data, int len, uint8_t *output, int output_len);
   int Send(uint8_t *data, int len, uint8_t *output, int output_len);
-  void ProcessLoop();
+  void ProcessLoop(int send_frame = 160);
 
  private:
   bool first_pack_ = true;

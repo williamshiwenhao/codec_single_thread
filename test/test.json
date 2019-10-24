@@ -3,10 +3,10 @@
     "codec_type": "pcm"
   },
   "rtp_test": {
-    "ip": "162.105.85.71",
-    "port": 8088,
-    "payload type": 0,
-    "codec type": "pcmu"
+    "ip": "162.105.85.217",
+    "port": 5070,
+    "payload type": 99,
+    "codec type": "amr"
   },
   "udp_packer_test": {
     "src_ip": "162.105.85.71",

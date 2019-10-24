@@ -90,7 +90,7 @@ void SendTest() {
     p_encoder = new PcmUEnCoder;
   } else if (codec_type == "pcma") {
     p_encoder = new PcmAEnCoder;
-  } else if (codec_type == "amr-wb") {
+  } else if (codec_type == "amr") {
     p_encoder = new AmrWbEnCoder;
   } else if (codec_type == "codec2") {
     p_encoder = new Codec2EnCoder;
@@ -106,10 +106,7 @@ void SendTest() {
   }
   // Init RTP
   RtpSession rtp;
-  MediaParam media_param;
-  media_param.payload_type = payload_type;
-  media_param.clock_rate = 8000;
-  media_param.samples_pre_frames = 160;
+  MediaParam media_param = GenerateDefaultParam(StringToType(codec_type));
   if (rtp.Init(media_param)) {
     fprintf(stderr, "[Error] Rtp session init error\n");
     return;
