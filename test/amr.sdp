@@ -1,0 +1,2 @@
+m=audio 5070 RTP/AVP 99        
+a=rtpmap:99 AMR-WB/16000/1
