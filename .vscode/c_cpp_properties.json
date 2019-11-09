@@ -3,16 +3,13 @@
         {
             "name": "Linux",
             "includePath": [
-                "./include",
-                "E:\\software\\Cygwin\\usr\\include",
-                "E:\\software\\Cygwin\\usr\\local\\include"
+                "./include"
             ],
             "defines": [
                 "_DEBUG",
                 "UNICODE",
                 "_UNICODE"
             ],
-            "compilerPath": "E:\\software\\LLVM\\bin\\clang.exe",
             "intelliSenseMode": "msvc-x64"
         }
     ],
