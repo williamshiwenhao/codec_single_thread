@@ -2,3 +2,4 @@ build
 codec_changer
 lib/*
 codec_server/codec_server
+.vscode
