@@ -33,8 +33,6 @@ int RtpSession::Init(const MediaParam& param) {
 
 int RtpSession::GenerateRtpHeader(uint8_t* buff, const unsigned length,
                                   const int frame_num) {
-  send_header_.sequence_num++;
-  send_header_.timestamp += frame_num * param_.samples_pre_frames;
   if (length < sizeof(RtpHeader)) {
     PrintLog("[Error] No enough memory for rtp header");
     return -1;
@@ -46,11 +44,14 @@ int RtpSession::GenerateRtpHeader(uint8_t* buff, const unsigned length,
   now->sequence_num = htons(send_header_.sequence_num);
   now->timestamp = htonl(send_header_.timestamp);
   now->ssrc = htonl(send_header_.ssrc);
+  send_header_.sequence_num++;
+  send_header_.timestamp += frame_num * param_.samples_pre_frames;
   return sizeof(RtpHeader);
 }
 
 int RtpSession::DecodeRtpHeader(uint8_t* pkt, const unsigned pkt_len,
-                                int& lost_samples, int& recv_frame) {
+                                uint32_t& sequence_number,
+                                uint32_t& time_stamp) {
   lost_samples = 0;
   if (pkt_len < sizeof(RtpHeader)) {
     PrintLog("[Warning] Packet's length less than rtp header length");
@@ -66,26 +67,10 @@ int RtpSession::DecodeRtpHeader(uint8_t* pkt, const unsigned pkt_len,
   now_head->sequence_num = ntohs(now_head->sequence_num);
   now_head->timestamp = ntohl(now_head->timestamp);
   now_head->ssrc = ntohl(now_head->ssrc);
+  sequence_number = now_head->sequence_num;
+  time_stamp = now_head->timestamp;
   // Though ssrc is just a id, I change it to host order for safe
-  if (decode_first_packet_) {
-    decode_first_packet_ = false;
-    recv_header_ = *now_head;
-  } else {
-    if (now_head->pt != recv_header_.pt) {
-      PrintLog("[Error] Payload type changed, cannot handle it");
-      return -1;
-    }
-    uint16_t diff = now_head->timestamp - recv_header_.timestamp;
-    if (diff > std::numeric_limits<uint16_t>::max() >> 1) {
-      // old packet
-      lost_samples = diff - std::numeric_limits<uint16_t>::max();
-      return -1;
-    } else {
-      lost_samples = diff;
-      recv_header_ = *now_head;
-    }
-    return sizeof(RtpHeader);
-  }
+
   // recv_frame = (pkt_len - sizeof(RtpHeader)) / param_.byte_pre_frame;
   // recv_frame must >= 0, so change it to uin32_t directly
   // recv_header_.timestamp += (uint32_t)(recv_frame)*param_.samples_pre_frames;

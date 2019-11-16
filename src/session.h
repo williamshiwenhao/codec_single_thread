@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "codec.h"
+#include "event_handler.h"
 #include "logger.h"
 #include "rtp.h"
 #include "sc.h"
@@ -45,6 +46,8 @@ class UploadSession {
   int Recv(uint8_t *data, int len, uint8_t *output, int output_len);
   int Send(uint8_t *data, int len, uint8_t *output, int output_len);
   void ProcessLoop(int send_frame = 160);
+  void HandleSocket();
+  void HandleEvent();
 
  private:
   bool first_pack_ = true;

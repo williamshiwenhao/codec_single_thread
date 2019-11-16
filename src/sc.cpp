@@ -36,7 +36,7 @@ int SC::Send(uint16_t payload_length, uint8_t* buff, int buff_length) {
   return sizeof(send_header_);
 }
 
-int SC::Recv(uint8_t* data, int data_length, int& lost_pack) {
+int SC::Recv(uint8_t* data, int data_length, uint32_t& lost_pack) {
   if (data_length < (int)sizeof(SCHeader)) {
     PrintLog("[Warning] Not a complete SC header");
     return -1;
@@ -60,25 +60,11 @@ int SC::Recv(uint8_t* data, int data_length, int& lost_pack) {
 
   // TODO: 注释下面的代码是为了测试方便，可以自环。正式使用时应当去除注释
   if (GetScForward(now_header) != GetScForward(recv_header_)) {
-    // FIXME:
     PrintLog("[Warning] SC recv: wrong forward");
     return -1;
   }
-
-  // Check id
-  if (recv_header_.ueid != now_header.ueid) {
-    PrintLog("[Warning] SC recv: id not match");
-    return -1;
-  }
-  SetScSn(recv_header_, GetScSn(recv_header_) + 1);
-  int lost = GetScSn(now_header) - GetScSn(recv_header_);
-  if (lost > std::numeric_limits<uint32_t>::max() >> 1) {
-    PrintLog("[Notice] Out of order");
-    printf("id = %u\n", GetScSn(now_header));
-    return -1;
-  }
-  lost_pack = lost;
-  SetScSn(recv_header_, GetScSn(now_header));
+  // Do not check sequence number here
+  sn = GetScSn(recv_header_);
   return sizeof(recv_header_);
 }
 

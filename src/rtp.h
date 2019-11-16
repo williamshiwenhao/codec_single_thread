@@ -18,7 +18,6 @@
 #include "codec.h"
 #include "logger.h"
 
-
 struct RtpHeader {
 #if __BYTE_ORDER == __BIG_ENDIAN
   uint16_t v : 2;  /**< packet type/version	    */
@@ -73,12 +72,14 @@ class RtpSession {
    *
    * @param pkt Pointer to packet recived
    * @param pkt_len Packet length
-   * @param lost_samples
+   * @param sequence_number
+   * @param time_stamp
    * @param recv_frame
    * @return int The rtp header length if >0 or decode false
    */
-  int DecodeRtpHeader(uint8_t* pkt, const unsigned pkt_len, int& lost_samples,
-                      int& recv_frame);
+  int DecodeRtpHeader(uint8_t* pkt, const unsigned pkt_len,
+                      uint32_t& sequence_number,
+                      uint32_t& time_stamp int& recv_frame);
 
  private:
   uint32_t SSRCGenerator();

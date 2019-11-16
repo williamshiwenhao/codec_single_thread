@@ -79,7 +79,15 @@ class SC {
    */
   int Send(uint16_t payload_length, uint8_t* buff, int buff_length);
 
-  int Recv(uint8_t* data, int data_length, int& lost_pack);
+  /**
+   * @brief Unmarshal SC packet
+   *
+   * @param data input data
+   * @param data_length input, length of data
+   * @param sn output, sequence number
+   * @return int The length of SC header or error when < 0
+   */
+  int Recv(uint8_t* data, int data_length, uint32_t& sn);
 
   uint32_t GetUEID() { return recv_header_.ueid; }
   uint32_t GetSn() { return GetScSn(recv_header_); }
