@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
 
 #include "codec.h"
 #include "json.h"
@@ -38,5 +39,58 @@ inline Transforward StringToForward(const std::string& str) {
   if (str == "From4G" || str == "FROM4G") return Transforward::From4G;
   return Transforward::To4G;
 }
+
+class PacketSorter {
+ public:
+  /**
+   * @brief Init or reset the socter
+   *
+   * @param increase sequence number increase by increase every packet
+   */
+  void Init(uint32_t increase);
+  /**
+   * @brief Insert a packet into socter
+   *
+   * @param sn sequence number
+   * @param data pointer to data, socter would not copy it
+   * @return int 0 insert normal, 1 it is the next packet, -1, sn behind and
+   * abort it Remember, it will auto increase one if get a packet
+   */
+  int Insert(uint32_t sn, uint8_t* data);
+
+  /**
+   * @brief Get a packet if possible
+   *
+   * @return uint8_t* Data or null if no packet aviliable
+   */
+  uint8_t* Get();
+
+  /**
+   * @brief Skip one packet
+   *
+   */
+  void Skip(uint32_t num = 1);
+
+  enum PacketStatus : int {
+    kPacketNow = 0,
+    kPacketNext = 1,
+    kPacketBehind = -1
+  };
+
+ private:
+  static bool Less(const uint32_t& lh, const uint32_t& rh) {
+    return int32_t(lh) - int32_t(rh) < 0;
+  }
+  struct CmpLess {
+    bool operator()(const uint32_t& lh, const uint32_t& rh) {
+      return Less(lh, rh);
+    }
+  };
+  bool is_first_ = true;
+  uint32_t increase_;
+  uint32_t now_sn_;
+
+  std::map<uint32_t, uint8_t*, CmpLess> data_;
+};
 
 #endif

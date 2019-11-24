@@ -11,6 +11,8 @@
 #include "session.h"
 #include "utils.h"
 
+const int kBuffSize = 2048;
+
 int UploadSession::Init(SessionParam param) {
   param_ = param;
   first_pack_ = true;
@@ -79,12 +81,12 @@ UploadSession::~UploadSession() {
   if (decoder_) delete decoder_;
 }
 
-int UploadSession::Recv(uint8_t* data, int len, uint8_t* output,
-                        int output_len) {
+int UploadSession::UnPak(uint8_t* data, int len, uint32_t& sc) {
   int status;
-  int lost_pack = 0;
-  status = sc_recv_.Recv(data, len, lost_pack);
+  int head_len = 0;
+  status = sc_recv_.Recv(data, len, sc);
   if (first_pack_) {
+    now_time = local_clock::now();
     first_pack_ = false;
     sc_send_.Init(sc_recv_.GetUEID(), Transforward::To4G, sc_recv_.GetSn());
   }
@@ -94,19 +96,18 @@ int UploadSession::Recv(uint8_t* data, int len, uint8_t* output,
     PrintLog("[Warning] Session codec: decode head warning");
     return -1;
   }
-  data += status;
-  len -= status;
-  // Decode frame
-  status = decoder_->Codec(data, len, output, output_len);
-  if (status < 0) {
-    PrintLog("[Warning] Session codec: decode frame error");
-    return -1;
-  }
   return status;
 }
 
-int UploadSession::Send(uint8_t* input, int input_len, uint8_t* output,
+int UploadSession::Send(uint8_t* input, int len, uint8_t* output,
                         int output_len) {
+  std::vector<uint8_t> codec_buff(kBuffSize);
+  int input_len = decoder_->Codec(input, len, codec_buff.data(), kBuffSize);
+  input = codec_buff.data();
+  if (input_len < 0) {
+    PrintLog("[Warning] Session codec: decode frame error");
+    return -1;
+  }
   if (input_len % kPcmFrameLength != 0) {
     PrintLog("[Warning] Upload Send error, wrong input length");
     return -1;
@@ -204,6 +205,41 @@ void UploadSession::ProcessLoop(int send_frame) {
       }
     }
   }
+}
+
+void UploadSession::HandleSocket(EventHandler* e_handler) {
+  uint8_t* input_data = new uint8_t[kBuffSize];
+  uint8_t output_data[kBuffSize];
+  int recv_len = recv_socket_.RecvFrom((char*)input_data, kBuffSize);
+  if (recv_len <= 0) {
+    PrintLog("[Error] Recv error");
+    return;
+  }
+  uint32_t sc = 0;
+  int head_len = UnPak(input_data, recv_len, sc);
+  if (head_len < 0) {
+    SendWhitePak(output_data, kBuffSize);
+    sorter_.Skip();
+  } else {
+    int status = sorter_.Insert(sc << 8, input_data);
+    if (status == PacketSorter::kPacketNow) {
+      int ret = CodecAndPak(input_data + head_len, recv_len - head_len,
+                            output_data, kBuffSize);
+      if (ret < 0) {
+        PrintLog("[Error] CodecAndPak error");
+        ret = SendWhitePak(output_data, kBuffSize);
+      }
+      ret = send_socket_.Send((char*)output_data, ret);
+      if (ret < 0) {
+        PrintLog("[Error] Send error");
+      }
+    } else if (status == PacketSorter::kPacketNext) {
+      input_data = nullptr;
+    }
+  }
+  while (true) {
+  }
+  delete input_data;
 }
 
 int DownloadSession::Init(const SessionParam param) {

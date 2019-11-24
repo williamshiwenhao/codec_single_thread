@@ -12,6 +12,7 @@
 #define __SESSION_H__
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <vector>
 
 #include "codec.h"
@@ -43,18 +44,23 @@ class UploadSession {
  public:
   ~UploadSession();
   int Init(const SessionParam param);
+  int UnPak(uint8_t *data, int len, uint32_t &sc);
+  int CodecAndPak(uint8_t *input, int len, uint8_t *output, int output_len);
+  int SendWhitePak(uint8_t *output, int output_len);
   int Recv(uint8_t *data, int len, uint8_t *output, int output_len);
   int Send(uint8_t *data, int len, uint8_t *output, int output_len);
   void ProcessLoop(int send_frame = 160);
-  void HandleSocket();
-  void HandleEvent();
+  void HandleSocket(EventHandler *);
+  void HandleEvent(EventHandler *);
 
  private:
   bool first_pack_ = true;
+  PacketSorter sorter_;
   UdpPacker udp_;
   SC sc_recv_, sc_send_;
   RtpSession rtp_;
   SessionParam param_;
+  local_clock::time_point now_time;
   UdpSocket recv_socket_, send_socket_;
   Coder *encoder_ = nullptr, *decoder_ = nullptr;
 };
